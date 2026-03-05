@@ -42,8 +42,7 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+            steps {                
                     sh '''
                         npm install -g sonar-scanner
 
@@ -55,7 +54,7 @@ pipeline {
                           -Dsonar.login=squ_d27dacd45a6c18772d7e941fd44e1617cf5c4c38
                     '''
                 }
-            }
+            
         }
 
         stage('Package Dist') {
