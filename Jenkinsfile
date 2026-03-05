@@ -16,7 +16,7 @@ pipeline {
 
         APP_NAME    = "frontend-react"
         APP_VERSION = "1.0.0"
-        ARTIFACT    = ""
+        ARTIFACT = "frontend.tar.gz"
     }
 
     stages {
