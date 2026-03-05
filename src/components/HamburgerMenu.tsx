@@ -4,20 +4,33 @@ import { getPlatforms } from "../services/platformService"
 import type { Platform } from "../services/platformService"
 
 const HamburgerMenu = () => {
+
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [open, setOpen] = useState<boolean>(false)
 
   useEffect(() => {
+
     const fetchPlatforms = async () => {
       try {
+
         const data = await getPlatforms()
-        setPlatforms(data)
+
+        console.log("PLATFORMS:", data)
+
+        if (Array.isArray(data)) {
+          setPlatforms(data)
+        } else {
+          console.error("La API no devolvió un array", data)
+          setPlatforms([])
+        }
+
       } catch (error) {
         console.error("Error cargando plataformas", error)
       }
     }
 
     fetchPlatforms()
+
   }, [])
 
   return (
@@ -52,7 +65,7 @@ const HamburgerMenu = () => {
         />
       )}
 
-      {/* MENÚ LATERAL */}
+      {/* MENÚ */}
       <div
         style={{
           position: "fixed",
@@ -68,9 +81,15 @@ const HamburgerMenu = () => {
           boxShadow: "4px 0 10px rgba(0,0,0,0.2)"
         }}
       >
+
         <h2 style={{ marginBottom: "20px" }}>Plataformas</h2>
 
         <ul style={{ listStyle: "none", padding: 0 }}>
+
+          {platforms.length === 0 && (
+            <li>No platforms</li>
+          )}
+
           {platforms.map((platform) => (
             <li key={platform.id} style={{ margin: "12px 0" }}>
               <Link
@@ -86,7 +105,9 @@ const HamburgerMenu = () => {
               </Link>
             </li>
           ))}
+
         </ul>
+
       </div>
     </>
   )

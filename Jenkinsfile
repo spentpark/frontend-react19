@@ -21,15 +21,11 @@ pipeline {
 
     stages {
 
-        stage('Clean') {
-            steps {
-                deleteDir()
-            }
-        }
+        
 
         stage('Install') {
             steps {
-                sh 'npm install'
+                sh 'npm install --legacy-peer-deps'
             }
         }
 

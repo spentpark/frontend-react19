@@ -8,5 +8,6 @@ export interface Platform {
 
 export const getPlatforms = async (): Promise<Platform[]> => {
   const response = await http.get<Platform[]>("/platforms")
+
   return response.data
 }

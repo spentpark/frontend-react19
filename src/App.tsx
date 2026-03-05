@@ -94,8 +94,10 @@ function Home() {
           data = await getGames(platform, page, limit)
         }
 
-        setGames(data.data)
-        setTotalPages(data.pagination.totalPages)
+        setGames(data?.data ?? [])
+        setTotalPages(
+          data?.pagination?.totalPages ?? 1
+        )
 
       } catch (err) {
         console.error(err)
