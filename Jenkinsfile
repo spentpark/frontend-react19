@@ -15,7 +15,7 @@ pipeline {
         NEXUS_CREDENTIAL_ID = "nexus"
 
         APP_NAME    = "frontend-react"
-        APP_VERSION = ""
+        APP_VERSION = "1.0.0"
         ARTIFACT    = ""
     }
 
