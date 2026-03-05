@@ -59,19 +59,10 @@ pipeline {
 
         stage('Package Dist') {
             steps {
-                script {
-
-                    def packageJson = readJSON file: 'package.json'
-                    env.APP_VERSION = packageJson.version
-                    env.ARTIFACT = "${APP_NAME}-${APP_VERSION}.zip"
-
-                    sh """
-                        cd dist
-                        zip -r ../${ARTIFACT} .
-                    """
-
-                    echo "Generated artifact: ${ARTIFACT}"
-                }
+                sh '''
+                cd dist
+                tar -czf ../frontend.tar.gz .
+                '''
             }
         }
 
