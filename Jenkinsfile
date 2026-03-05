@@ -29,6 +29,12 @@ pipeline {
             }
         }
 
+        stage('Test') {
+            steps {
+                sh 'npm run test:run'
+            }
+        }
+
         stage('Build React (Vite)') {
             steps {
                 sh 'npm run build'
