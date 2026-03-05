@@ -29,12 +29,6 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                sh 'npm run test:run'
-            }
-        }
-
         stage('Test coverage') {
             steps {
                 sh 'npm run test:coverage'
@@ -58,6 +52,7 @@ pipeline {
                           -Dsonar.sources=src \
                           -Dsonar.host.url=$SONAR_HOST_URL \
                           -Dsonar.login=squ_d27dacd45a6c18772d7e941fd44e1617cf5c4c38
+                          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                     '''
                 }
             
@@ -93,14 +88,20 @@ pipeline {
     }
 
     post {
-        success {
-            echo "Build SUCCESS"
-        }
-        failure {
-            echo "Build FAILED"
-        }
-        always {
-            cleanWs()
-        }
+
+    success {
+        echo "Build SUCCESS"
     }
+
+    failure {
+        echo "Build FAILED"
+    }
+
+    always {
+
+        archiveArtifacts artifacts: 'coverage/**', fingerprint: true
+
+        cleanWs()
+    }
+}
 }
