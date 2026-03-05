@@ -7,7 +7,8 @@ pipeline {
     }
 
     environment {
-        SONAR_HOST_URL = "http://172.17.0.1:9000"
+        SONAR_HOST_URL      = "http://172.17.0.1:9000"
+        SONAR_CREDENTIAL_ID = "sonar-token"
 
         NEXUS_URL           = "172.17.0.1:8081"
         NEXUS_REPOSITORY    = "raw-releases"
@@ -20,9 +21,11 @@ pipeline {
 
     stages {
 
+        
+
         stage('Install') {
             steps {
-                sh 'npm ci'
+                sh 'npm install --legacy-peer-deps'
             }
         }
 
