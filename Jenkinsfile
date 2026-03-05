@@ -35,6 +35,12 @@ pipeline {
             }
         }
 
+        stage('Test coverage') {
+            steps {
+                sh 'npm run test:coverage'
+            }
+        }
+
         stage('Build React (Vite)') {
             steps {
                 sh 'npm run build'
