@@ -7,8 +7,7 @@ pipeline {
     }
 
     environment {
-        SONAR_HOST_URL      = "http://172.17.0.1:9000"
-        SONAR_CREDENTIAL_ID = "sonar-token"
+        SONAR_HOST_URL = "http://172.17.0.1:9000"
 
         NEXUS_URL           = "172.17.0.1:8081"
         NEXUS_REPOSITORY    = "raw-releases"
@@ -21,11 +20,9 @@ pipeline {
 
     stages {
 
-        
-
         stage('Install') {
             steps {
-                sh 'npm install --legacy-peer-deps'
+                sh 'npm ci'
             }
         }
 
@@ -43,7 +40,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withCredentials([string(credentialsId: "${SONAR_CREDENTIAL_ID}", variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         npm install -g sonar-scanner
 
