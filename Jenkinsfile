@@ -47,14 +47,14 @@ pipeline {
                         npm install -g sonar-scanner
 
                         sonar-scanner \
-                          -Dsonar.projectKey=frontend-react \
-                          -Dsonar.projectName=frontend-react \
-                          -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
-                          -Dsonar.exclusions=**/*.test.ts,**/*.test.tsx
-                          -Dsonar.sources=src \
-                          -Dsonar.host.url=$SONAR_HOST_URL \
-                          -Dsonar.login=squ_d27dacd45a6c18772d7e941fd44e1617cf5c4c38 \
-                          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                        -Dsonar.projectKey=frontend-react \
+                        -Dsonar.projectName=frontend-react \
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.token=$SONAR_TOKEN \
+                        -Dsonar.sources=src \
+                        -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
+                        -Dsonar.exclusions=**/*.test.ts,**/*.test.tsx \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                     '''
                 }
             
