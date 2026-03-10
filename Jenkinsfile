@@ -49,6 +49,8 @@ pipeline {
                         sonar-scanner \
                           -Dsonar.projectKey=frontend-react \
                           -Dsonar.projectName=frontend-react \
+                          -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
+                          -Dsonar.exclusions=**/*.test.ts,**/*.test.tsx
                           -Dsonar.sources=src \
                           -Dsonar.host.url=$SONAR_HOST_URL \
                           -Dsonar.login=squ_d27dacd45a6c18772d7e941fd44e1617cf5c4c38 \

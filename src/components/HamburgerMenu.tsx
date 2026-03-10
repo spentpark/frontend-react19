@@ -51,19 +51,26 @@ const HamburgerMenu = () => {
 
       {/* OVERLAY */}
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0,0,0,0.4)",
-            zIndex: 998
-          }}
-        />
-      )}
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={() => setOpen(false)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        setOpen(false)
+      }
+    }}
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0,0,0,0.4)",
+      zIndex: 998
+    }}
+  />
+)}
 
       {/* MENÚ */}
       <div

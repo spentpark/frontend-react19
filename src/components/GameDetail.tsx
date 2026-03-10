@@ -60,7 +60,7 @@ function GameDetail() {
       <>
         <h3>{title}</h3>
         <div className="video-container">
-          <iframe
+          <iframe title="video"
             src={url}
             allowFullScreen
           ></iframe>
@@ -141,7 +141,7 @@ function GameDetail() {
         <>
           <h3>Original Soundtrack</h3>
           <div className="spotify-container">
-            <iframe
+            <iframe title="ost"
               src={getSpotifyEmbedUrl(game.spotify_ost)}
               height="152"
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
