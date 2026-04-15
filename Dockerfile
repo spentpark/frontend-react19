@@ -23,11 +23,11 @@ RUN npm run build
 # =============================
 FROM nginx:alpine
 
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Copiar build generado por Vite
 COPY --from=build /usr/src/app/dist /usr/share/nginx/html
 
-# Configuración personalizada para SPA (React Router)
-COPY default.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8065
 
