@@ -1,4 +1,4 @@
-import { http } from "./http"
+import { http } from './http'
 
 export interface Game {
   id: number
@@ -37,38 +37,21 @@ export interface ApiResponse {
   pagination: Pagination
 }
 
-/* LISTAR JUEGOS */
 export const getGames = async (
   platform: string,
   page: number,
   limit: number
 ): Promise<ApiResponse> => {
-
-  const response = await http.get<ApiResponse>("/games", {
-    params: { platform, page, limit }
-  })
-
+  const response = await http.get<ApiResponse>('/games', { params: { platform, page, limit } })
   return response.data
 }
 
-/* BUSCAR JUEGOS */
-export const searchGames = async (
-  title: string,
-  page: number,
-  limit: number
-): Promise<ApiResponse> => {
-
-  const response = await http.get<ApiResponse>("/games/search", {
-    params: { title, page, limit }
-  })
-
+export const searchGames = async (title: string, page: number, limit: number): Promise<ApiResponse> => {
+  const response = await http.get<ApiResponse>('/games/search', { params: { title, page, limit } })
   return response.data
 }
 
-/* OBTENER DETALLE DEL JUEGO */
-export const getGameById = async (id: string | number): Promise<GameDetail> => {
-
-  const response = await http.get<GameDetail>(`/games/${id}`)
-
+export const getGameById = async (id: string | number) => {
+  const response = await http.get(`/games/${id}`)
   return response.data
 }

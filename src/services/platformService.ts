@@ -1,4 +1,4 @@
-import { http } from "./http"
+import { http } from './http'
 
 export interface Platform {
   id: number
@@ -7,7 +7,6 @@ export interface Platform {
 }
 
 export const getPlatforms = async (): Promise<Platform[]> => {
-  const response = await http.get<Platform[]>("/platforms")
-
+  const response = await http.get<Platform[]>('/platforms')
   return response.data
 }
