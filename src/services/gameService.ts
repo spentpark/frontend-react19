@@ -41,11 +41,12 @@ export interface ApiResponse {
 export const getGames = async (
   platform: string,
   page: number,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<ApiResponse> => {
-
   const response = await http.get<ApiResponse>("/games", {
-    params: { platform, page, limit }
+    params: { platform, page, limit },
+    signal
   })
 
   return response.data
@@ -55,20 +56,23 @@ export const getGames = async (
 export const searchGames = async (
   title: string,
   page: number,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<ApiResponse> => {
-
   const response = await http.get<ApiResponse>("/games/search", {
-    params: { title, page, limit }
+    params: { title, page, limit },
+    signal
   })
 
   return response.data
 }
 
 /* OBTENER DETALLE DEL JUEGO */
-export const getGameById = async (id: string | number): Promise<GameDetail> => {
-
-  const response = await http.get<GameDetail>(`/games/${id}`)
+export const getGameById = async (
+  id: string | number,
+  signal?: AbortSignal
+): Promise<GameDetail> => {
+  const response = await http.get<GameDetail>(`/games/${id}`, { signal })
 
   return response.data
 }

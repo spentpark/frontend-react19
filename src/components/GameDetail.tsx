@@ -1,88 +1,99 @@
 import { useEffect, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 
-import { getGameById } from "../services/gameService"
+import { getGameById, type GameDetail as GameDetailModel } from "../services/gameService"
+import { isCanceledError } from "../services/http"
+import VideoEmbed from "./VideoEmbed"
 
-interface GameDetail {
-  id: number
-  title: string
-  description: string
-  image_Large?: string
-  Platform?: string
-  Publisher?: string
-  genre?: string
-  players?: string
-  releasedate?: string
-  youtube_Trailer?: string
-  youtube_Walk?: string
-  youtube_ending?: string
-  youtube_secrets?: string
-  youtube_speedrun?: string
-  youtube_review?: string
-  spotify_ost?: string
+/* Convierte una URL de Spotify en su versión embebible */
+const getSpotifyEmbedUrl = (url: string) =>
+  url.includes("spotify.com") ? url.replace("open.spotify.com/", "open.spotify.com/embed/") : url
+
+const VIDEOS = [
+  { label: "Trailer", field: "youtube_Trailer" },
+  { label: "Walkthrough", field: "youtube_Walk" },
+  { label: "Ending", field: "youtube_ending" },
+  { label: "Secrets", field: "youtube_secrets" },
+  { label: "Speed Run", field: "youtube_speedrun" },
+  { label: "Review", field: "youtube_review" }
+] as const
+
+interface DetailMessageProps {
+  message: string
+  onBack: () => void
 }
 
+/* Mensaje con acción de volver, usado cuando no hay juego que mostrar */
+const DetailMessage = ({ message, onBack }: DetailMessageProps) => (
+  <div className="game-detail-container">
+    <p className="error-message" role="alert">
+      {message}
+    </p>
+
+    <button className="back-btn" type="button" onClick={onBack}>
+      ⬅ Back
+    </button>
+  </div>
+)
+
 function GameDetail() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  const [game, setGame] = useState<GameDetail | null>(null)
+  const [game, setGame] = useState<GameDetailModel | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!id) return
 
-  const fetchGame = async () => {
-    try {
-      const data = await getGameById(id!)
-      setGame(data)
-    } catch (error) {
-      console.error(error)
-    } finally {
-      setLoading(false)
+    const controller = new AbortController()
+
+    const fetchGame = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const data = await getGameById(id, controller.signal)
+
+        setGame(data)
+      } catch (err) {
+        if (isCanceledError(err)) return
+
+        console.error(err)
+        setError("No se pudo cargar el juego. Inténtalo de nuevo.")
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        }
+      }
     }
-  }
 
-  fetchGame()
+    fetchGame()
 
-}, [id])
+    return () => controller.abort()
+  }, [id])
 
-  /* 🔥 Función para convertir Spotify a embed */
-  const getSpotifyEmbedUrl = (url: string) => {
-    if (!url.includes("spotify.com")) return url
-    return url.replace("open.spotify.com/", "open.spotify.com/embed/")
-  }
+  const goBack = () => navigate(-1)
 
-  /* 🔥 Render dinámico para cualquier video */
-  const renderVideo = (title: string, url?: string) => {
-    if (!url) return null
-
-    return (
-      <>
-        <h3>{title}</h3>
-        <div className="video-container">
-          <iframe title="video"
-            src={url}
-            allowFullScreen
-          ></iframe>
-        </div>
-      </>
-    )
-  }
+  /* Sin id en la ruta no hay nada que cargar */
+  if (!id) return <DetailMessage message="Juego no encontrado." onBack={goBack} />
 
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="loading-container" role="status">
         <div className="spinner"></div>
         <p>Loading game...</p>
       </div>
     )
   }
 
+  if (error) return <DetailMessage message={error} onBack={goBack} />
+
   if (!game) return <p>Game not found</p>
 
   return (
     <div className="game-detail-container">
-
       {/* ================= HEADER ================= */}
       <div className="game-header">
         {game.image_Large && (
@@ -90,10 +101,13 @@ function GameDetail() {
             src={game.image_Large}
             alt={game.title}
             className="game-cover"
+            loading="lazy"
+            decoding="async"
           />
         )}
+
         <div className="game-info">
-          <h2>{game.title}</h2>
+          <h1>{game.title}</h1>
           <p className="description">{game.description}</p>
         </div>
       </div>
@@ -101,49 +115,54 @@ function GameDetail() {
       {/* ================= META ================= */}
       <div className="game-meta">
         <div className="meta-card">
-          <h4>Platform</h4>
+          <h2 className="meta-label">Platform</h2>
           <p>{game.Platform}</p>
         </div>
 
         <div className="meta-card">
-          <h4>Publisher</h4>
+          <h2 className="meta-label">Publisher</h2>
           <p>{game.Publisher}</p>
         </div>
 
         <div className="meta-card">
-          <h4>Genre</h4>
+          <h2 className="meta-label">Genre</h2>
           <p>{game.genre}</p>
         </div>
 
         <div className="meta-card">
-          <h4>Players</h4>
+          <h2 className="meta-label">Players</h2>
           <p>{game.players}</p>
         </div>
 
         <div className="meta-card">
-          <h4>Release</h4>
+          <h2 className="meta-label">Release</h2>
           <p>{game.releasedate}</p>
         </div>
       </div>
 
       {/* ================= VIDEOS ================= */}
 
-      {renderVideo("Trailer", game.youtube_Trailer)}
-      {renderVideo("Walkthrough", game.youtube_Walk)}
-      {renderVideo("Ending", game.youtube_ending)}
-      {renderVideo("Secrets", game.youtube_secrets)}
-      {renderVideo("Speed Run", game.youtube_speedrun)}
-      {renderVideo("Review", game.youtube_review)}
+      {VIDEOS.map((video) => (
+        <VideoEmbed
+          key={video.label}
+          label={video.label}
+          gameTitle={game.title}
+          url={game[video.field]}
+        />
+      ))}
 
       {/* ================= SPOTIFY ================= */}
 
       {game.spotify_ost && (
         <>
-          <h3>Original Soundtrack</h3>
+          <h2 className="section-title">Original Soundtrack</h2>
+
           <div className="spotify-container">
-            <iframe title="ost"
+            <iframe
+              title={`${game.title} - Original Soundtrack`}
               src={getSpotifyEmbedUrl(game.spotify_ost)}
               height="152"
+              loading="lazy"
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             ></iframe>
           </div>
@@ -151,13 +170,10 @@ function GameDetail() {
       )}
 
       {/* ================= BACK ================= */}
-      <button
-        onClick={() => navigate(-1)}
-        className="back-btn"
-      >
+
+      <button className="back-btn" type="button" onClick={goBack}>
         ⬅ Back
       </button>
-
     </div>
   )
 }

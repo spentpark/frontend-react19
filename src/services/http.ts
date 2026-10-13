@@ -7,3 +7,7 @@ export const http = axios.create({
     "Content-Type": "application/json"
   }
 })
+
+/* Detecta si un error proviene de una petición cancelada mediante AbortController */
+export const isCanceledError = (error: unknown): boolean =>
+  axios.isCancel(error) || (error instanceof Error && error.name === "CanceledError")

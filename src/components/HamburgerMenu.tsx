@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { getPlatforms } from "../services/platformService"
-import type { Platform } from "../services/platformService"
+
+import { getPlatforms, type Platform } from "../services/platformService"
+import { isCanceledError } from "../services/http"
 
 const HamburgerMenu = () => {
-
   const [platforms, setPlatforms] = useState<Platform[]>([])
-  const [open, setOpen] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
+    const controller = new AbortController()
 
     const fetchPlatforms = async () => {
       try {
+        setError(null)
 
-        const data = await getPlatforms()
-
-        console.log("PLATFORMS:", data)
+        const data = await getPlatforms(controller.signal)
 
         if (Array.isArray(data)) {
           setPlatforms(data)
@@ -23,99 +24,88 @@ const HamburgerMenu = () => {
           console.error("La API no devolvió un array", data)
           setPlatforms([])
         }
+      } catch (err) {
+        if (isCanceledError(err)) return
 
-      } catch (error) {
-        console.error("Error cargando plataformas", error)
+        console.error("Error cargando plataformas", err)
+        setError("No se pudieron cargar las plataformas.")
       }
     }
 
     fetchPlatforms()
 
+    return () => controller.abort()
   }, [])
+
+  /* Cierre del menú con la tecla Escape */
+  useEffect(() => {
+    if (!open) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [open])
 
   return (
     <>
       {/* BOTÓN HAMBURGUESA */}
       <button
-        onClick={() => setOpen(!open)}
-        style={{
-          fontSize: "26px",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          color: "white"
-        }}
+        className="menu-btn"
+        type="button"
+        aria-label="Open platforms menu"
+        aria-expanded={open}
+        aria-controls="platform-menu"
+        onClick={() => setOpen((prev) => !prev)}
       >
         ☰
       </button>
 
       {/* OVERLAY */}
       {open && (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={() => setOpen(false)}
-    onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        setOpen(false)
-      }
-    }}
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "rgba(0,0,0,0.4)",
-      zIndex: 998
-    }}
-  />
-)}
+        <button
+          className="overlay"
+          type="button"
+          aria-label="Close platforms menu"
+          onClick={() => setOpen(false)}
+        />
+      )}
 
       {/* MENÚ */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: open ? 0 : "-260px",
-          width: "260px",
-          height: "100%",
-          backgroundColor: "#3498db",
-          color: "white",
-          padding: "25px",
-          transition: "left 0.3s ease",
-          zIndex: 999,
-          boxShadow: "4px 0 10px rgba(0,0,0,0.2)"
-        }}
+      <nav
+        id="platform-menu"
+        className={open ? "side-menu open" : "side-menu"}
+        aria-label="Platforms"
+        inert={!open}
       >
+        <h2 className="side-menu-title">Plataformas</h2>
 
-        <h2 style={{ marginBottom: "20px" }}>Plataformas</h2>
-
-        <ul style={{ listStyle: "none", padding: 0 }}>
-
-          {platforms.length === 0 && (
-            <li>No platforms</li>
-          )}
+        <ul>
+          {platforms.length === 0 && <li>No platforms</li>}
 
           {platforms.map((platform) => (
-            <li key={platform.id} style={{ margin: "12px 0" }}>
+            <li key={platform.id}>
               <Link
                 to={`/?platform=${encodeURIComponent(platform.description)}`}
                 onClick={() => setOpen(false)}
-                style={{
-                  color: "white",
-                  textDecoration: "none",
-                  fontWeight: 500
-                }}
               >
                 {platform.description}
               </Link>
             </li>
           ))}
-
         </ul>
 
-      </div>
+        {error && (
+          <p className="side-menu-error" role="alert">
+            {error}
+          </p>
+        )}
+      </nav>
     </>
   )
 }

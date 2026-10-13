@@ -6,8 +6,8 @@ export interface Platform {
   url: string
 }
 
-export const getPlatforms = async (): Promise<Platform[]> => {
-  const response = await http.get<Platform[]>("/platforms")
+export const getPlatforms = async (signal?: AbortSignal): Promise<Platform[]> => {
+  const response = await http.get<Platform[]>("/platforms", { signal })
 
   return response.data
 }

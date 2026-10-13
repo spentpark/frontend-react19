@@ -1,13 +1,15 @@
-import { render, screen, waitFor } from "@testing-library/react"
-import { MemoryRouter, Routes, Route } from "react-router-dom"
-import { describe, expect, it, vi } from "vitest"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
 import GameDetail from "../GameDetail"
 
 import * as gameService from "../../services/gameService"
+import type { GameDetail as GameDetailModel } from "../../services/gameService"
 
 vi.mock("../../services/gameService")
 
-const mockGame = {
+const mockGame: GameDetailModel = {
   id: 1,
   title: "The Last of Us",
   description: "Post-apocalyptic action game",
@@ -32,6 +34,9 @@ const renderComponent = () =>
   )
 
 describe("GameDetail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it("muestra loading inicialmente", () => {
     vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
@@ -52,6 +57,16 @@ describe("GameDetail", () => {
     expect(screen.getByText("Naughty Dog")).toBeInTheDocument()
   })
 
+  it("pide el juego con su id y un AbortSignal", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+
+    renderComponent()
+
+    await screen.findByText("The Last of Us")
+
+    expect(gameService.getGameById).toHaveBeenCalledWith("1", expect.any(AbortSignal))
+  })
+
   it("renderiza la imagen del juego", async () => {
     vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
 
@@ -62,7 +77,7 @@ describe("GameDetail", () => {
     expect(image).toHaveAttribute("src", "image.jpg")
   })
 
-  it("renderiza videos cuando existen", async () => {
+  it("monta los vídeos solo cuando el usuario los solicita", async () => {
     vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
 
     renderComponent()
@@ -70,9 +85,13 @@ describe("GameDetail", () => {
     expect(await screen.findByText("Trailer")).toBeInTheDocument()
     expect(screen.getByText("Walkthrough")).toBeInTheDocument()
 
-    const iframes = document.querySelectorAll("iframe")
+    /* Los reproductores de terceros no se descargan hasta que se piden */
+    expect(document.querySelectorAll(".video-container iframe")).toHaveLength(0)
 
-    expect(iframes.length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: /Play Trailer/ }))
+
+    expect(document.querySelectorAll(".video-container iframe")).toHaveLength(1)
+    expect(screen.getByTitle("The Last of Us - Trailer")).toBeInTheDocument()
   })
 
   it("renderiza spotify embed correctamente", async () => {
@@ -84,20 +103,31 @@ describe("GameDetail", () => {
 
     const iframe = document.querySelector(".spotify-container iframe")
 
-    expect(iframe).toHaveAttribute(
-      "src",
-      "https://open.spotify.com/embed/album/test"
-    )
+    expect(iframe).toHaveAttribute("src", "https://open.spotify.com/embed/album/test")
   })
 
   it("muestra mensaje si el juego no existe", async () => {
-    vi.spyOn(gameService, "getGameById").mockResolvedValue(null as any)
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(null as unknown as GameDetailModel)
 
     renderComponent()
 
     await waitFor(() => {
       expect(screen.getByText("Game not found")).toBeInTheDocument()
     })
+  })
+
+  it("muestra un error si falla la petición", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(gameService, "getGameById").mockRejectedValue(new Error("boom"))
+
+    renderComponent()
+
+    expect(
+      await screen.findByText("No se pudo cargar el juego. Inténtalo de nuevo.")
+    ).toBeInTheDocument()
+
+    consoleError.mockRestore()
   })
 
   it("muestra botón back", async () => {
@@ -109,5 +139,4 @@ describe("GameDetail", () => {
 
     expect(button).toBeInTheDocument()
   })
-
 })

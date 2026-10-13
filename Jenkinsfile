@@ -3,14 +3,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node20'
+        nodejs 'node24'
     }
 
     environment {
-        SONAR_HOST_URL      = "http://172.17.0.1:9000"
+        SONAR_HOST_URL      = "http://192.168.1.82:9000"
         SONAR_TOKEN = credentials('sonar-token')//"squ_d27dacd45a6c18772d7e941fd44e1617cf5c4c38"
 
-        NEXUS_URL           = "172.17.0.1:8081"
+        NEXUS_URL           = "192.168.1.82:8081"
         NEXUS_REPOSITORY    = "raw-releases"
         NEXUS_CREDENTIAL_ID = "nexus"
 
