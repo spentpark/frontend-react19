@@ -68,7 +68,7 @@ pipeline {
                 '''
             }
         }
-
+        /*
         stage('Upload to Nexus (Raw)') {
             steps {
                 withCredentials([
@@ -87,6 +87,7 @@ pipeline {
                 }
             }
         }
+        */
     }
 
     post {
