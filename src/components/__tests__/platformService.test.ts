@@ -11,44 +11,70 @@ vi.mock("../../services/http", () => ({
   }
 }))
 
+const platforms: Platform[] = [
+  {
+    id: 1,
+    description: "PlayStation 4",
+    url: "ps4"
+  },
+  {
+    id: 2,
+    description: "Xbox One",
+    url: "xbox-one"
+  }
+]
+
 describe("platformService", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it("getPlatforms debe llamar a /platforms", async () => {
+  it("getPlatforms debe llamar a /platforms y desempaquetar la paginación", async () => {
     const mockResponse = {
-      data: [
-        {
-          id: 1,
-          description: "PlayStation 4",
-          url: "ps4"
-        },
-        {
-          id: 2,
-          description: "Xbox One",
-          url: "xbox-one"
+      data: {
+        data: platforms,
+        pagination: {
+          currentPage: 1,
+          perPage: 200,
+          totalRecords: 2,
+          totalPages: 1
         }
-      ]
+      }
     }
 
     vi.mocked(http.get).mockResolvedValue(mockResponse as unknown as AxiosResponse<Platform[]>)
 
     const result = await getPlatforms()
 
-    expect(http.get).toHaveBeenCalledWith("/platforms", { signal: undefined })
+    expect(http.get).toHaveBeenCalledWith("/platforms", {
+      params: { limit: 200 },
+      signal: undefined
+    })
 
-    expect(result).toEqual(mockResponse.data)
+    expect(result).toEqual(platforms)
+  })
+
+  it("getPlatforms acepta también una respuesta en forma de array plano", async () => {
+    vi.mocked(http.get).mockResolvedValue({ data: platforms } as unknown as AxiosResponse<
+      Platform[]
+    >)
+
+    const result = await getPlatforms()
+
+    expect(result).toEqual(platforms)
   })
 
   it("reenvía el AbortSignal a la petición para poder cancelarla", async () => {
-    vi.mocked(http.get).mockResolvedValue({ data: [] } as unknown as AxiosResponse<Platform[]>)
+    vi.mocked(http.get).mockResolvedValue({ data: { data: [] } } as unknown as AxiosResponse<
+      Platform[]
+    >)
 
     const controller = new AbortController()
 
     await getPlatforms(controller.signal)
 
     expect(http.get).toHaveBeenCalledWith("/platforms", {
+      params: { limit: 200 },
       signal: controller.signal
     })
   })
