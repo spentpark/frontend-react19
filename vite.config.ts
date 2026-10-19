@@ -38,7 +38,9 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],
-      reportsDirectory: "./coverage"
+      reportsDirectory: "./coverage",
+      /* El CSS no aporta sentencias JS: ensuciaría el informe de cobertura */
+      exclude: ["src/**/*.css"]
     }
   }
 })

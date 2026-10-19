@@ -78,4 +78,12 @@ describe("platformService", () => {
       signal: controller.signal
     })
   })
+
+  it("devuelve una lista vacía si la respuesta no trae datos", async () => {
+    vi.mocked(http.get).mockResolvedValue({ data: {} } as unknown as AxiosResponse<Platform[]>)
+
+    const result = await getPlatforms()
+
+    expect(result).toEqual([])
+  })
 })

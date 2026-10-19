@@ -5,11 +5,18 @@ import App from "../../App"
 
 import * as gameService from "../../services/gameService"
 import * as platformService from "../../services/platformService"
+import * as reviewService from "../../services/reviewService"
 
 /* ================= MOCKS ================= */
 
 vi.mock("../../services/gameService")
 vi.mock("../../services/platformService")
+
+/* El detalle se carga de forma perezosa: se mockea para no salir a la red */
+vi.mock("../../services/reviewService", () => ({
+  getReviewsByGame: vi.fn(),
+  REVIEWS_PAGE_SIZE: 10
+}))
 
 const mockGamesResponse = {
   data: [
@@ -40,6 +47,11 @@ describe("App / Home", () => {
     vi.spyOn(gameService, "getGames").mockResolvedValue(mockGamesResponse)
 
     vi.spyOn(gameService, "searchGames").mockResolvedValue(mockGamesResponse)
+
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+      data: [],
+      pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
+    })
   })
 
   /* ================= HEADER + FOOTER ================= */
@@ -226,5 +238,90 @@ describe("App / Home", () => {
     ).toBeInTheDocument()
 
     consoleError.mockRestore()
+  })
+
+  /* ================= NAVEGACIÓN AL DETALLE ================= */
+
+  it("navega al detalle al pulsar View", async () => {
+    render(<App />)
+
+    const [viewButton] = await screen.findAllByText("View")
+
+    fireEvent.click(viewButton)
+
+    await waitFor(() => {
+      expect(screen.getByText("Game not found")).toBeInTheDocument()
+    })
+
+    expect(gameService.getGameById).toHaveBeenCalledWith("1", expect.any(AbortSignal))
+  })
+
+  /* ================= PÁGINA ANTERIOR ================= */
+
+  it("vuelve a la página anterior", async () => {
+    render(<App />)
+
+    await screen.findByText("The Last of Us")
+
+    fireEvent.click(screen.getByText("Next ➡"))
+
+    await waitFor(() => {
+      expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText("⬅ Prev"))
+
+    await waitFor(() => {
+      expect(gameService.getGames).toHaveBeenLastCalledWith(
+        "Sony Playstation 4",
+        1,
+        5,
+        expect.any(AbortSignal)
+      )
+    })
+  })
+
+  /* ================= PLATAFORMA DESDE EL MENÚ ================= */
+
+  it("cambia de plataforma desde el menú lateral", async () => {
+    render(<App />)
+
+    await screen.findByText("The Last of Us")
+
+    fireEvent.click(screen.getByText("☰"))
+
+    fireEvent.click(await screen.findByRole("link", { name: "Xbox" }))
+
+    await waitFor(() => {
+      expect(gameService.getGames).toHaveBeenLastCalledWith("Xbox", 1, 5, expect.any(AbortSignal))
+    })
+
+    expect(await screen.findByText(/Game List \(Xbox\)/)).toBeInTheDocument()
+  })
+
+  /* ================= CANCELACIÓN ================= */
+
+  it("no muestra error si la carga se cancela", async () => {
+    const canceled = Object.assign(new Error("canceled"), { name: "CanceledError" })
+
+    vi.spyOn(gameService, "getGames").mockRejectedValue(canceled)
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(gameService.getGames).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByText(/No se pudieron cargar los juegos/)).toBeNull()
+  })
+
+  /* ================= RESPUESTA INCOMPLETA ================= */
+
+  it("tolera una respuesta sin datos ni paginación", async () => {
+    vi.spyOn(gameService, "getGames").mockResolvedValue({} as never)
+
+    render(<App />)
+
+    expect(await screen.findByText("No games found")).toBeInTheDocument()
   })
 })

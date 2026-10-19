@@ -63,4 +63,22 @@ describe("ErrorBoundary", () => {
 
     consoleError.mockRestore()
   })
+
+  it("describe como desconocido un error que no es instancia de Error", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const Weird = () => {
+      throw "boom"
+    }
+
+    render(
+      <ErrorBoundary>
+        <Weird />
+      </ErrorBoundary>
+    )
+
+    expect(screen.getByText("Error desconocido")).toBeInTheDocument()
+
+    consoleError.mockRestore()
+  })
 })

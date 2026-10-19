@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import GameDetail from "../GameDetail"
@@ -247,5 +247,167 @@ describe("GameDetail", () => {
     expect(await screen.findByText("No se pudieron cargar las reseñas.")).toBeInTheDocument()
 
     consoleError.mockRestore()
+  })
+
+  it("vuelve a la página anterior de reseñas", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+      data: sampleReviews.data,
+      pagination: { currentPage: 1, perPage: 10, totalRecords: 25, totalPages: 3 }
+    })
+
+    renderComponent()
+
+    await screen.findByText("Una obra maestra")
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }))
+
+    await waitFor(() => {
+      expect(reviewService.getReviewsByGame).toHaveBeenCalledWith(
+        "1",
+        2,
+        10,
+        expect.any(AbortSignal)
+      )
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: /Prev/ }))
+
+    await waitFor(() => {
+      expect(reviewService.getReviewsByGame).toHaveBeenLastCalledWith(
+        "1",
+        1,
+        10,
+        expect.any(AbortSignal)
+      )
+    })
+  })
+
+  it("reinicia la página de reseñas al cambiar de juego", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+      data: sampleReviews.data,
+      pagination: { currentPage: 1, perPage: 10, totalRecords: 25, totalPages: 3 }
+    })
+
+    render(
+      <MemoryRouter initialEntries={["/game/1"]}>
+        <Routes>
+          <Route
+            path="/game/:id"
+            element={
+              <>
+                <GameDetail />
+                <Link to="/game/2">Otro juego</Link>
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await screen.findByText("Una obra maestra")
+
+    fireEvent.click(screen.getByText("Otro juego"))
+
+    await waitFor(() => {
+      expect(gameService.getGameById).toHaveBeenLastCalledWith("2", expect.any(AbortSignal))
+    })
+  })
+
+  it("no muestra portada ni banda sonora si el juego no las trae", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue({
+      id: 1,
+      title: "Juego mínimo",
+      description: "Sin portada ni ost"
+    })
+
+    renderComponent()
+
+    await screen.findByText("Juego mínimo")
+
+    expect(screen.queryByRole("img")).toBeNull()
+    expect(document.querySelector(".spotify-container")).toBeNull()
+  })
+
+  it("tolera reseñas sin autor, fecha ni nota", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+      data: [{ id: 9, review: "Solo texto", source: "Anónimo", id_game: 1 }],
+      pagination: { currentPage: 1, perPage: 10, totalRecords: 1, totalPages: 1 }
+    })
+
+    renderComponent()
+
+    expect(await screen.findByText("Solo texto")).toBeInTheDocument()
+    expect(document.querySelector(".review-author")).toBeNull()
+    expect(document.querySelector(".review-date")).toBeNull()
+    expect(document.querySelector(".review-score")).toBeNull()
+  })
+
+  it("no muestra error si la carga del juego se cancela", async () => {
+    const canceled = Object.assign(new Error("canceled"), { name: "CanceledError" })
+
+    vi.spyOn(gameService, "getGameById").mockRejectedValue(canceled)
+
+    renderComponent()
+
+    await waitFor(() => {
+      expect(gameService.getGameById).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("no muestra error si la carga de reseñas se cancela", async () => {
+    const canceled = Object.assign(new Error("canceled"), { name: "CanceledError" })
+
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockRejectedValue(canceled)
+
+    renderComponent()
+
+    await screen.findByText("The Last of Us")
+
+    await waitFor(() => {
+      expect(reviewService.getReviewsByGame).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByText("No se pudieron cargar las reseñas.")).toBeNull()
+  })
+
+  it("muestra un aviso si la ruta no trae id", () => {
+    render(
+      <MemoryRouter>
+        <GameDetail />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText("Juego no encontrado.")).toBeInTheDocument()
+  })
+
+  it("deja tal cual la URL de banda sonora que no es de Spotify", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue({
+      ...mockGame,
+      spotify_ost: "https://example.com/ost"
+    })
+
+    renderComponent()
+
+    await screen.findByText("Original Soundtrack")
+
+    expect(document.querySelector(".spotify-container iframe")).toHaveAttribute(
+      "src",
+      "https://example.com/ost"
+    )
+  })
+
+  it("tolera una respuesta de reseñas sin datos ni paginación", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({} as never)
+
+    renderComponent()
+
+    expect(await screen.findByText("No reviews yet")).toBeInTheDocument()
   })
 })

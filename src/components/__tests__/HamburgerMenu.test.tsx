@@ -109,6 +109,19 @@ describe("HamburgerMenu", () => {
     })
   })
 
+  it("mantiene el menú abierto al pulsar otras teclas", async () => {
+    renderMenu()
+
+    const button = screen.getByText("☰")
+    fireEvent.click(button)
+
+    await screen.findByText("PlayStation 4")
+
+    fireEvent.keyDown(window, { key: "Enter" })
+
+    expect(button).toHaveAttribute("aria-expanded", "true")
+  })
+
   it("enlaza cada plataforma con su parámetro de búsqueda", async () => {
     renderMenu()
 
@@ -120,5 +133,62 @@ describe("HamburgerMenu", () => {
       "href",
       "/?platform=PlayStation%204"
     )
+  })
+
+  it("avisa cuando la API no devuelve un array", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(platformService, "getPlatforms").mockResolvedValue(
+      {} as unknown as typeof mockPlatforms
+    )
+
+    renderMenu()
+
+    expect(await screen.findByText("No platforms")).toBeInTheDocument()
+    expect(consoleError).toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
+  it("muestra un mensaje si falla la carga de plataformas", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(platformService, "getPlatforms").mockRejectedValue(new Error("boom"))
+
+    renderMenu()
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudieron cargar las plataformas."
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it("no muestra error si la petición se cancela", async () => {
+    const canceled = Object.assign(new Error("canceled"), { name: "CanceledError" })
+
+    vi.spyOn(platformService, "getPlatforms").mockRejectedValue(canceled)
+
+    renderMenu()
+
+    await waitFor(() => {
+      expect(platformService.getPlatforms).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("cierra el menú al pulsar un enlace de plataforma", async () => {
+    renderMenu()
+
+    fireEvent.click(screen.getByText("☰"))
+
+    const link = await screen.findByRole("link", { name: "PlayStation 4" })
+
+    fireEvent.click(link)
+
+    await waitFor(() => {
+      expect(document.querySelector(".overlay")).toBeNull()
+    })
   })
 })
