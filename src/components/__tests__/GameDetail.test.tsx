@@ -6,8 +6,45 @@ import GameDetail from "../GameDetail"
 
 import * as gameService from "../../services/gameService"
 import type { GameDetail as GameDetailModel } from "../../services/gameService"
+import * as reviewService from "../../services/reviewService"
+import type { ReviewsResponse } from "../../services/reviewService"
 
 vi.mock("../../services/gameService")
+
+/* Se declara el mock con factory para conservar REVIEWS_PAGE_SIZE real */
+vi.mock("../../services/reviewService", () => ({
+  getReviewsByGame: vi.fn(),
+  REVIEWS_PAGE_SIZE: 10
+}))
+
+const emptyReviews: ReviewsResponse = {
+  data: [],
+  pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
+}
+
+const sampleReviews: ReviewsResponse = {
+  data: [
+    {
+      id: 1,
+      name: "Ana",
+      date: "2024-01-01",
+      review: "Una obra maestra",
+      score: "10",
+      source: "IGN",
+      id_game: 1
+    },
+    {
+      id: 2,
+      name: "Luis",
+      date: "2024-02-02",
+      review: "Muy entretenido",
+      score: "8",
+      source: "Metacritic",
+      id_game: 1
+    }
+  ],
+  pagination: { currentPage: 1, perPage: 10, totalRecords: 2, totalPages: 1 }
+}
 
 const mockGame: GameDetailModel = {
   id: 1,
@@ -36,6 +73,8 @@ const renderComponent = () =>
 describe("GameDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    /* Por defecto el juego no tiene reseñas; cada test decide su caso */
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue(emptyReviews)
   })
 
   it("muestra loading inicialmente", () => {
@@ -138,5 +177,75 @@ describe("GameDetail", () => {
     const button = await screen.findByText("⬅ Back")
 
     expect(button).toBeInTheDocument()
+  })
+
+  it("muestra las reseñas del juego", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue(sampleReviews)
+
+    renderComponent()
+
+    expect(await screen.findByText("Una obra maestra")).toBeInTheDocument()
+    expect(screen.getByText("Muy entretenido")).toBeInTheDocument()
+    expect(screen.getByText("IGN")).toBeInTheDocument()
+    expect(screen.getByText("Metacritic")).toBeInTheDocument()
+    expect(screen.getByText("Ana")).toBeInTheDocument()
+  })
+
+  it("pide las reseñas paginadas de 10 en 10", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue(sampleReviews)
+
+    renderComponent()
+
+    await screen.findByText("Una obra maestra")
+
+    expect(reviewService.getReviewsByGame).toHaveBeenCalledWith("1", 1, 10, expect.any(AbortSignal))
+  })
+
+  it("muestra un mensaje cuando el juego no tiene reseñas", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+
+    renderComponent()
+
+    expect(await screen.findByText("No reviews yet")).toBeInTheDocument()
+  })
+
+  it("permite avanzar a la página siguiente de reseñas", async () => {
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+      data: sampleReviews.data,
+      pagination: { currentPage: 1, perPage: 10, totalRecords: 25, totalPages: 3 }
+    })
+
+    renderComponent()
+
+    await screen.findByText("Una obra maestra")
+
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }))
+
+    await waitFor(() => {
+      expect(reviewService.getReviewsByGame).toHaveBeenCalledWith(
+        "1",
+        2,
+        10,
+        expect.any(AbortSignal)
+      )
+    })
+  })
+
+  it("muestra un error si fallan las reseñas", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
+    vi.mocked(reviewService.getReviewsByGame).mockRejectedValue(new Error("boom"))
+
+    renderComponent()
+
+    expect(await screen.findByText("No se pudieron cargar las reseñas.")).toBeInTheDocument()
+
+    consoleError.mockRestore()
   })
 })

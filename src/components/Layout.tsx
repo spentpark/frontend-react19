@@ -20,10 +20,10 @@ function Layout() {
         <ErrorBoundary>
           <Suspense
             fallback={
-              <div className="loading-container" role="status">
+              <output className="loading-container">
                 <div className="spinner"></div>
                 <p>Loading...</p>
-              </div>
+              </output>
             }
           >
             <Outlet />

@@ -8,7 +8,7 @@ interface VideoEmbedProps {
 
 /* Los iframes de YouTube se montan solo cuando el usuario los solicita: evita
    descargar el reproductor de terceros (varios cientos de KB) al abrir el detalle */
-function VideoEmbed({ label, gameTitle, url }: VideoEmbedProps) {
+function VideoEmbed({ label, gameTitle, url }: Readonly<VideoEmbedProps>) {
   const [active, setActive] = useState(false)
 
   if (!url) return null

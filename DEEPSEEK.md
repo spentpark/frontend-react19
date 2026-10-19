@@ -54,7 +54,7 @@ frontend-react19/
     ├── components/
     │   ├── Layout.tsx          # Header + <main> + footer, ErrorBoundary + Suspense around <Outlet/>
     │   ├── ErrorBoundary.tsx   # Class boundary that catches render errors
-    │   ├── GameDetail.tsx      # Route /game/:id detail view (lazy-loaded)
+    │   ├── GameDetail.tsx      # Route /game/:id detail view + paginated reviews (lazy-loaded)
     │   ├── VideoEmbed.tsx      # Click-to-load YouTube facade
     │   ├── HamburgerMenu.tsx   # Platform drawer (CSS classes, Escape, inert)
     │   └── __tests__/          # All component, page, service and http tests
@@ -63,9 +63,10 @@ frontend-react19/
     ├── config/
     │   └── environment.ts      # Exposes VITE_API_URL
     ├── services/
-    │   ├── http.ts             # Shared axios instance + isCanceledError helper
+    │   ├── http.ts             # Shared axios instance + isCanceledError / isNotFoundError
     │   ├── gameService.ts      # getGames, searchGames, getGameById
-    │   └── platformService.ts  # getPlatforms
+    │   ├── platformService.ts  # getPlatforms
+    │   └── reviewService.ts    # getReviewsByGame (reseñas paginadas de 10 en 10)
     └── test/
         └── setup.ts            # Imports @testing-library/jest-dom/vitest
 ```
@@ -222,9 +223,10 @@ Base URL: `VITE_API_URL`.
 | GET | `/games` | `platform`, `page`, `limit` | `ApiResponse` (`{ data: Game[], pagination }`) |
 | GET | `/games/search` | `title`, `page`, `limit` | `ApiResponse` |
 | GET | `/games/:id` | — | `GameDetail` |
-| GET | `/platforms` | — | `Platform[]` (`{ id, description, url }`) |
+| GET | `/platforms` | `limit` | `Platform[]` (desenvuelve `{ data, pagination }`) |
+| GET | `/reviews/:id` | `page`, `limit` | `ReviewsResponse` (`{ data: Review[], pagination }`) |
 
-All four are called with an optional `AbortSignal` as described in *Data fetching*.
+All of them are called with an optional `AbortSignal` as described in *Data fetching*.
 
 ## Gotchas
 

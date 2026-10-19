@@ -135,10 +135,10 @@ function Home() {
       {/* ================= LOADING ================= */}
 
       {isInitialLoading && (
-        <div className="loading-container" role="status">
+        <output className="loading-container">
           <div className="spinner"></div>
           <p>Loading games...</p>
-        </div>
+        </output>
       )}
 
       {/* ================= ERROR ================= */}

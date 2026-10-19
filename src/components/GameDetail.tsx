@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import { getGameById, type GameDetail as GameDetailModel } from "../services/gameService"
+import { getReviewsByGame, REVIEWS_PAGE_SIZE, type Review } from "../services/reviewService"
 import { isCanceledError } from "../services/http"
 import VideoEmbed from "./VideoEmbed"
 
@@ -44,6 +45,22 @@ function GameDetail() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  /* Reseñas del juego, paginadas de REVIEWS_PAGE_SIZE en REVIEWS_PAGE_SIZE */
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewsPage, setReviewsPage] = useState(1)
+  const [reviewsTotalPages, setReviewsTotalPages] = useState(0)
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
+
+  /* Ajuste de estado en render: al cambiar de juego volvemos a la página 1 de
+     reseñas sin pedir la página anterior */
+  const [previousId, setPreviousId] = useState(id)
+
+  if (previousId !== id) {
+    setPreviousId(id)
+    setReviewsPage(1)
+  }
+
   useEffect(() => {
     if (!id) return
 
@@ -74,6 +91,41 @@ function GameDetail() {
     return () => controller.abort()
   }, [id])
 
+  /* Carga de reseñas; se cancela la petición en vuelo al cambiar de página o
+     de juego, o al desmontar el componente */
+  useEffect(() => {
+    if (!id) return
+
+    const controller = new AbortController()
+
+    const fetchReviews = async () => {
+      try {
+        setReviewsLoading(true)
+        setReviewsError(null)
+
+        const data = await getReviewsByGame(id, reviewsPage, REVIEWS_PAGE_SIZE, controller.signal)
+
+        setReviews(data.data ?? [])
+        setReviewsTotalPages(data.pagination?.totalPages ?? 0)
+      } catch (err) {
+        if (isCanceledError(err)) return
+
+        console.error(err)
+        setReviewsError("No se pudieron cargar las reseñas.")
+        setReviews([])
+        setReviewsTotalPages(0)
+      } finally {
+        if (!controller.signal.aborted) {
+          setReviewsLoading(false)
+        }
+      }
+    }
+
+    fetchReviews()
+
+    return () => controller.abort()
+  }, [id, reviewsPage])
+
   const goBack = () => navigate(-1)
 
   /* Sin id en la ruta no hay nada que cargar */
@@ -81,10 +133,10 @@ function GameDetail() {
 
   if (loading) {
     return (
-      <div className="loading-container" role="status">
+      <output className="loading-container">
         <div className="spinner"></div>
         <p>Loading game...</p>
-      </div>
+      </output>
     )
   }
 
@@ -166,6 +218,75 @@ function GameDetail() {
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             ></iframe>
           </div>
+        </>
+      )}
+
+      {/* ================= REVIEWS ================= */}
+
+      <h2 className="section-title">Reviews</h2>
+
+      {reviewsLoading && (
+        <output className="loading-container">
+          <div className="spinner"></div>
+          <p>Loading reviews...</p>
+        </output>
+      )}
+
+      {reviewsError && (
+        <div className="error-message" role="alert">
+          {reviewsError}
+        </div>
+      )}
+
+      {!reviewsLoading && !reviewsError && reviews.length === 0 && (
+        <p className="no-reviews-message">No reviews yet</p>
+      )}
+
+      {reviews.length > 0 && (
+        <>
+          <ul className="review-list">
+            {reviews.map((review) => (
+              <li key={review.id} className="review-card">
+                <div className="review-header">
+                  <span className="review-source">{review.source}</span>
+
+                  {review.score && <span className="review-score">{review.score}</span>}
+                </div>
+
+                {review.name && <p className="review-author">{review.name}</p>}
+
+                {review.date && <p className="review-date">{review.date}</p>}
+
+                <p className="review-text">{review.review}</p>
+              </li>
+            ))}
+          </ul>
+
+          {reviewsTotalPages > 1 && (
+            <nav className="pagination" aria-label="Reviews pagination">
+              <button
+                className="btn-nav"
+                type="button"
+                onClick={() => setReviewsPage((prev) => prev - 1)}
+                disabled={reviewsPage <= 1}
+              >
+                ⬅ Prev
+              </button>
+
+              <span className="page-info">
+                Page {reviewsPage} of {reviewsTotalPages}
+              </span>
+
+              <button
+                className="btn-nav"
+                type="button"
+                onClick={() => setReviewsPage((prev) => prev + 1)}
+                disabled={reviewsPage >= reviewsTotalPages}
+              >
+                Next ➡
+              </button>
+            </nav>
+          )}
         </>
       )}
 
