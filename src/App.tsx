@@ -2,6 +2,7 @@ import { lazy } from "react"
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 
 import Layout from "./components/Layout"
+import Catalog from "./pages/Catalog"
 import Home from "./pages/Home"
 
 import "./App.css"
@@ -15,6 +16,7 @@ function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/catalog" element={<Catalog />} />
           <Route path="/game/:id" element={<GameDetail />} />
         </Route>
       </Routes>

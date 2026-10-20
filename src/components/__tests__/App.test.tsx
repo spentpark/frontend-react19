@@ -36,32 +36,87 @@ const mockPlatforms = [
   { id: 2, description: "Xbox", url: "" }
 ]
 
-describe("App / Home", () => {
+const mockRandomGame: gameService.RandomGame = {
+  id: 10,
+  title: "Elden Ring",
+  platform: "PlayStation 5",
+  publisher: "FromSoftware",
+  releasedate: "2022-02-25",
+  players: "1",
+  genre: "RPG",
+  imageOriginal: "https://img.test/elden-ring.jpg",
+  youtubeTrailer: "https://www.youtube.com/embed/elden-ring"
+}
+
+/* Mocks comunes a todas las páginas: menú lateral y reseñas del detalle */
+beforeEach(() => {
+  vi.clearAllMocks()
+
+  vi.spyOn(platformService, "getPlatforms").mockResolvedValue(mockPlatforms)
+
+  vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+    data: [],
+    pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
+  })
+})
+
+describe("App / Home (juego al azar)", () => {
   beforeEach(() => {
     window.history.pushState({}, "", "/")
 
-    vi.clearAllMocks()
+    vi.spyOn(gameService, "getRandomGame").mockResolvedValue(mockRandomGame)
+  })
 
-    vi.spyOn(platformService, "getPlatforms").mockResolvedValue(mockPlatforms)
+  it("renderiza la pantalla de inicio con header y footer", async () => {
+    render(<App />)
+
+    expect(await screen.findByText("Descubre tu próximo juego")).toBeInTheDocument()
+
+    expect(screen.getByText(/All rights reserved/)).toBeInTheDocument()
+  })
+
+  it("carga un juego al azar desde el backend", async () => {
+    render(<App />)
+
+    expect(await screen.findByText("Elden Ring")).toBeInTheDocument()
+
+    expect(gameService.getRandomGame).toHaveBeenCalledWith(expect.any(AbortSignal))
+  })
+
+  it("navega al detalle del juego desde el botón Ver juego", async () => {
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole("link", { name: "Ver juego" }))
+
+    await waitFor(() => {
+      expect(gameService.getGameById).toHaveBeenCalledWith("10", expect.any(AbortSignal))
+    })
+
+    expect(await screen.findByText("Game not found")).toBeInTheDocument()
+  })
+
+  it("muestra un mensaje de error si falla el servicio del juego al azar", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(gameService, "getRandomGame").mockRejectedValue(new Error("boom"))
+
+    render(<App />)
+
+    expect(
+      await screen.findByText("No se pudo cargar el juego al azar. Inténtalo de nuevo.")
+    ).toBeInTheDocument()
+
+    consoleError.mockRestore()
+  })
+})
+
+describe("App / Catalog", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/catalog")
 
     vi.spyOn(gameService, "getGames").mockResolvedValue(mockGamesResponse)
 
     vi.spyOn(gameService, "searchGames").mockResolvedValue(mockGamesResponse)
-
-    vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
-      data: [],
-      pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
-    })
-  })
-
-  /* ================= HEADER + FOOTER ================= */
-
-  it("renderiza el header y footer", async () => {
-    render(<App />)
-
-    expect(await screen.findByText(/Game List/)).toBeInTheDocument()
-
-    expect(screen.getByText(/All rights reserved/)).toBeInTheDocument()
   })
 
   /* ================= LOAD GAMES ================= */
@@ -84,11 +139,11 @@ describe("App / Home", () => {
   /* ================= PLATFORM FROM URL ================= */
 
   it("usa la plataforma indicada en la URL", async () => {
-    window.history.pushState({}, "", "/?platform=Xbox%20One")
+    window.history.pushState({}, "", "/catalog?platform=Xbox%20One")
 
     render(<App />)
 
-    expect(await screen.findByText(/Game List \(Xbox One\)/)).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { level: 1, name: "Xbox One" })).toBeInTheDocument()
 
     expect(gameService.getGames).toHaveBeenCalledWith("Xbox One", 1, 5, expect.any(AbortSignal))
   })
@@ -114,15 +169,13 @@ describe("App / Home", () => {
   it("permite buscar juegos", async () => {
     render(<App />)
 
-    const input = await screen.findByPlaceholderText("Search game...")
+    const input = await screen.findByPlaceholderText("Search games")
 
     fireEvent.change(input, {
       target: { value: "last" }
     })
 
-    const button = screen.getByText("🔎 Search")
-
-    fireEvent.click(button)
+    fireEvent.click(screen.getByRole("button", { name: "Search" }))
 
     await waitFor(() => {
       expect(gameService.searchGames).toHaveBeenCalled()
@@ -134,7 +187,7 @@ describe("App / Home", () => {
 
     await screen.findByText("The Last of Us")
 
-    const input = screen.getByPlaceholderText("Search game...")
+    const input = screen.getByPlaceholderText("Search games")
 
     fireEvent.change(input, { target: { value: "l" } })
     fireEvent.change(input, { target: { value: "la" } })
@@ -160,13 +213,13 @@ describe("App / Home", () => {
   it("limpia búsqueda al presionar clear", async () => {
     render(<App />)
 
-    const input = await screen.findByPlaceholderText("Search game...")
+    const input = await screen.findByPlaceholderText("Search games")
 
     fireEvent.change(input, {
       target: { value: "test" }
     })
 
-    const clearBtn = await screen.findByText("✖ Clear")
+    const clearBtn = await screen.findByRole("button", { name: "Clear search" })
 
     fireEvent.click(clearBtn)
 
@@ -180,9 +233,9 @@ describe("App / Home", () => {
 
     await screen.findByText("The Last of Us")
 
-    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+    expect(document.querySelector(".page-info")).toHaveTextContent("Page 1 of 2")
 
-    expect(screen.getByText("Next ➡")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next page" })).toBeInTheDocument()
   })
 
   /* ================= NEXT PAGE ================= */
@@ -190,7 +243,7 @@ describe("App / Home", () => {
   it("cambia de página al presionar Next", async () => {
     render(<App />)
 
-    const nextButton = await screen.findByText("Next ➡")
+    const nextButton = await screen.findByRole("button", { name: "Next page" })
 
     fireEvent.click(nextButton)
 
@@ -221,7 +274,7 @@ describe("App / Home", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("No games found")).toBeInTheDocument()
+    expect(await screen.findByText(/No games found/)).toBeInTheDocument()
   })
 
   /* ================= ERROR ================= */
@@ -263,13 +316,13 @@ describe("App / Home", () => {
 
     await screen.findByText("The Last of Us")
 
-    fireEvent.click(screen.getByText("Next ➡"))
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
 
     await waitFor(() => {
-      expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
+      expect(document.querySelector(".page-info")).toHaveTextContent("Page 2 of 2")
     })
 
-    fireEvent.click(screen.getByText("⬅ Prev"))
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }))
 
     await waitFor(() => {
       expect(gameService.getGames).toHaveBeenLastCalledWith(
@@ -288,7 +341,7 @@ describe("App / Home", () => {
 
     await screen.findByText("The Last of Us")
 
-    fireEvent.click(screen.getByText("☰"))
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }))
 
     fireEvent.click(await screen.findByRole("link", { name: "Xbox" }))
 
@@ -296,7 +349,7 @@ describe("App / Home", () => {
       expect(gameService.getGames).toHaveBeenLastCalledWith("Xbox", 1, 5, expect.any(AbortSignal))
     })
 
-    expect(await screen.findByText(/Game List \(Xbox\)/)).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { level: 1, name: "Xbox" })).toBeInTheDocument()
   })
 
   /* ================= CANCELACIÓN ================= */
@@ -322,6 +375,6 @@ describe("App / Home", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("No games found")).toBeInTheDocument()
+    expect(await screen.findByText(/No games found/)).toBeInTheDocument()
   })
 })

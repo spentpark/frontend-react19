@@ -174,7 +174,7 @@ describe("GameDetail", () => {
 
     renderComponent()
 
-    const button = await screen.findByText("⬅ Back")
+    const button = await screen.findByRole("button", { name: /Back/ })
 
     expect(button).toBeInTheDocument()
   })
@@ -222,7 +222,7 @@ describe("GameDetail", () => {
 
     await screen.findByText("Una obra maestra")
 
-    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument()
+    expect(document.querySelector(".page-info")).toHaveTextContent("Page 1 of 3")
 
     fireEvent.click(screen.getByRole("button", { name: /Next/ }))
 

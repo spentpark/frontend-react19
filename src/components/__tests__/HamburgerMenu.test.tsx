@@ -25,6 +25,8 @@ const renderMenu = () =>
     </MemoryRouter>
   )
 
+const openMenu = () => fireEvent.click(screen.getByRole("button", { name: "Open menu" }))
+
 describe("HamburgerMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -35,24 +37,24 @@ describe("HamburgerMenu", () => {
   it("renderiza el botón hamburguesa", () => {
     renderMenu()
 
-    const button = screen.getByRole("button")
+    const button = screen.getByRole("button", { name: "Open menu" })
     expect(button).toBeInTheDocument()
   })
 
   it("abre el menú al hacer click", async () => {
     renderMenu()
 
-    const button = screen.getByRole("button")
-
-    fireEvent.click(button)
+    openMenu()
 
     expect(screen.getByText("Plataformas")).toBeInTheDocument()
+
+    await screen.findByText("PlayStation 4")
   })
 
   it("carga plataformas desde el service", async () => {
     renderMenu()
 
-    fireEvent.click(screen.getByRole("button"))
+    openMenu()
 
     await waitFor(() => {
       expect(screen.getByText("PlayStation 4")).toBeInTheDocument()
@@ -65,7 +67,7 @@ describe("HamburgerMenu", () => {
   it("expone el estado del menú con aria-expanded", () => {
     renderMenu()
 
-    const button = screen.getByRole("button")
+    const button = screen.getByRole("button", { name: "Open menu" })
 
     expect(button).toHaveAttribute("aria-expanded", "false")
 
@@ -77,7 +79,7 @@ describe("HamburgerMenu", () => {
   it("cierra el menú al hacer click en el overlay", async () => {
     renderMenu()
 
-    const button = screen.getByText("☰")
+    const button = screen.getByRole("button", { name: "Open menu" })
     fireEvent.click(button)
 
     await screen.findByText("PlayStation 4")
@@ -97,7 +99,7 @@ describe("HamburgerMenu", () => {
   it("cierra el menú con la tecla Escape", async () => {
     renderMenu()
 
-    const button = screen.getByText("☰")
+    const button = screen.getByRole("button", { name: "Open menu" })
     fireEvent.click(button)
 
     await screen.findByText("PlayStation 4")
@@ -112,7 +114,7 @@ describe("HamburgerMenu", () => {
   it("mantiene el menú abierto al pulsar otras teclas", async () => {
     renderMenu()
 
-    const button = screen.getByText("☰")
+    const button = screen.getByRole("button", { name: "Open menu" })
     fireEvent.click(button)
 
     await screen.findByText("PlayStation 4")
@@ -125,14 +127,24 @@ describe("HamburgerMenu", () => {
   it("enlaza cada plataforma con su parámetro de búsqueda", async () => {
     renderMenu()
 
-    fireEvent.click(screen.getByText("☰"))
+    openMenu()
 
     await screen.findByText("PlayStation 4")
 
     expect(screen.getByRole("link", { name: "PlayStation 4" })).toHaveAttribute(
       "href",
-      "/?platform=PlayStation%204"
+      "/catalog?platform=PlayStation%204"
     )
+  })
+
+  it("enlaza al inicio de la aplicación", async () => {
+    renderMenu()
+
+    openMenu()
+
+    await screen.findByText("PlayStation 4")
+
+    expect(screen.getByRole("link", { name: "Inicio" })).toHaveAttribute("href", "/")
   })
 
   it("avisa cuando la API no devuelve un array", async () => {
@@ -156,6 +168,8 @@ describe("HamburgerMenu", () => {
     vi.spyOn(platformService, "getPlatforms").mockRejectedValue(new Error("boom"))
 
     renderMenu()
+
+    openMenu()
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "No se pudieron cargar las plataformas."
@@ -181,7 +195,7 @@ describe("HamburgerMenu", () => {
   it("cierra el menú al pulsar un enlace de plataforma", async () => {
     renderMenu()
 
-    fireEvent.click(screen.getByText("☰"))
+    openMenu()
 
     const link = await screen.findByRole("link", { name: "PlayStation 4" })
 

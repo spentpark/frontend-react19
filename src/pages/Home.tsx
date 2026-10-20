@@ -1,219 +1,208 @@
 import { useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { Link } from "react-router-dom"
 
-import { getGames, searchGames, type Game } from "../services/gameService"
+import { getRandomGame, type RandomGame } from "../services/gameService"
 import { isCanceledError } from "../services/http"
 
-const DEFAULT_PLATFORM = "Sony Playstation 4"
-const PAGE_SIZE = 5
-const SEARCH_DEBOUNCE_MS = 350
+/* La pantalla se refresca sola para ir descubriendo otros juegos */
+const REFRESH_MS = 200000
 
-/* Listado, búsqueda y paginación de juegos */
-function Home() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
+const UNKNOWN_VALUE = "—"
 
-  const platform = searchParams.get("platform") ?? DEFAULT_PLATFORM
+const orDash = (value?: string | null) => value || UNKNOWN_VALUE
 
-  const [inputValue, setInputValue] = useState("")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [page, setPage] = useState(1)
-  const [games, setGames] = useState<Game[]>([])
-  const [totalPages, setTotalPages] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+/* Convierte una URL de YouTube (embed, watch o youtu.be) en su versión
+   embebible con autoplay */
+const buildTrailerEmbedUrl = (url: string): string => {
+  const withAutoplay = (base: string) => base + (base.includes("?") ? "&autoplay=1" : "?autoplay=1")
 
-  /* Ajuste de estado en render: al cambiar de plataforma volvemos a la página 1
-     sin provocar una petición extra con la página anterior */
-  const [previousPlatform, setPreviousPlatform] = useState(platform)
+  try {
+    const parsed = new URL(url)
 
-  if (previousPlatform !== platform) {
-    setPreviousPlatform(platform)
-    setPage(1)
+    if (parsed.hostname === "youtu.be") {
+      const videoId = parsed.pathname.slice(1)
+      if (videoId) return withAutoplay(`https://www.youtube.com/embed/${videoId}`)
+    }
+
+    if (parsed.hostname.endsWith("youtube.com") && parsed.pathname === "/watch") {
+      const videoId = parsed.searchParams.get("v")
+      if (videoId) return withAutoplay(`https://www.youtube.com/embed/${videoId}`)
+    }
+  } catch {
+    /* URL relativa o no parseable: se usa tal cual con autoplay */
   }
 
-  /* Debounce: esperamos a que el usuario deje de escribir antes de buscar */
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchTerm(inputValue.trim())
-      setPage(1)
-    }, SEARCH_DEBOUNCE_MS)
+  return withAutoplay(url)
+}
 
-    return () => clearTimeout(timer)
-  }, [inputValue])
+/* Pantalla de inicio: un juego al azar de la colección con su tráiler oficial */
+function Home() {
+  const [game, setGame] = useState<RandomGame | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState(0)
 
-  /* Carga de juegos; la petición en vuelo se cancela al cambiar los filtros */
   useEffect(() => {
     const controller = new AbortController()
+    let refreshTimer: number | undefined
 
-    const fetchGames = async () => {
+    const loadRandomGame = async () => {
       try {
         setLoading(true)
         setError(null)
 
-        const data =
-          searchTerm !== ""
-            ? await searchGames(searchTerm, page, PAGE_SIZE, controller.signal)
-            : await getGames(platform, page, PAGE_SIZE, controller.signal)
+        const data = await getRandomGame(controller.signal)
 
-        setGames(data.data ?? [])
-        setTotalPages(data.pagination?.totalPages ?? 0)
+        setGame(data)
       } catch (err) {
         if (isCanceledError(err)) return
 
         console.error(err)
-        setError("No se pudieron cargar los juegos. Inténtalo de nuevo.")
-        setGames([])
-        setTotalPages(0)
+        setError("No se pudo cargar el juego al azar. Inténtalo de nuevo.")
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
+
+          /* Tras cada carga se programa la siguiente de forma automática */
+          refreshTimer = window.setTimeout(() => setRequestId((current) => current + 1), REFRESH_MS)
         }
       }
     }
 
-    fetchGames()
+    loadRandomGame()
 
-    return () => controller.abort()
-  }, [page, platform, searchTerm])
+    return () => {
+      controller.abort()
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+    }
+  }, [requestId])
 
-  const handleSearch = () => {
-    setSearchTerm(inputValue.trim())
-    setPage(1)
-  }
+  const refresh = () => setRequestId((current) => current + 1)
 
-  const handleClear = () => {
-    setInputValue("")
-    setSearchTerm("")
-    setPage(1)
-  }
-
-  const viewGame = (game: Game) => {
-    navigate(`/game/${game.id}`)
-  }
-
-  const isInitialLoading = loading && games.length === 0
+  const isFirstLoad = loading && !game
 
   return (
-    <div className="game-list">
-      <h1 className="title">🎮 Game List ({platform})</h1>
+    <div className="home">
+      {/* ================= CABECERA DE PÁGINA ================= */}
 
-      {/* ================= BUSCADOR ================= */}
+      <div className="page-head">
+        <nav className="breadcrumb" aria-label="Ruta de navegación">
+          <Link to="/">Inicio</Link>
+          <span aria-hidden="true">/</span>
+          <strong>Juego al azar</strong>
+        </nav>
 
-      <form
-        className="search-container"
-        role="search"
-        onSubmit={(event) => {
-          event.preventDefault()
-          handleSearch()
-        }}
-      >
-        <label className="sr-only" htmlFor="game-search">
-          Search game
-        </label>
+        <h1>Descubre tu próximo juego</h1>
+        <p>Un juego al azar de la colección, con su tráiler oficial</p>
+      </div>
 
-        <input
-          id="game-search"
-          className="search-input"
-          type="text"
-          placeholder="Search game..."
-          value={inputValue}
-          onChange={(event) => setInputValue(event.target.value)}
-        />
+      {/* ================= JUEGO AL AZAR ================= */}
 
-        <button className="search-btn" type="submit">
-          🔎 Search
-        </button>
-
-        {inputValue && (
-          <button className="clear-btn" type="button" onClick={handleClear}>
-            ✖ Clear
-          </button>
+      <section className="card" aria-label="Juego al azar">
+        {isFirstLoad && (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Cargando datos…</p>
+          </div>
         )}
-      </form>
 
-      {/* ================= LOADING ================= */}
+        {error && !loading && (
+          <>
+            <div className="error-message" role="alert">
+              {error}
+            </div>
 
-      {isInitialLoading && (
-        <output className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading games...</p>
-        </output>
-      )}
-
-      {/* ================= ERROR ================= */}
-
-      {error && (
-        <div className="error-message" role="alert">
-          {error}
-        </div>
-      )}
-
-      {/* ================= TABLA ================= */}
-
-      {games.length > 0 && (
-        <>
-          <table className="styled-table">
-            <caption className="sr-only">Games for {platform}</caption>
-
-            <thead>
-              <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Title</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {games.map((game) => (
-                <tr key={game.id}>
-                  <td>{game.id}</td>
-                  <td>{game.title}</td>
-                  <td>
-                    <button className="btn-view" type="button" onClick={() => viewGame(game)}>
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* ================= PAGINACIÓN ================= */}
-
-          {totalPages > 1 && (
-            <nav className="pagination" aria-label="Pagination">
-              <button
-                className="btn-nav"
-                type="button"
-                onClick={() => setPage((prev) => prev - 1)}
-                disabled={page <= 1}
-              >
-                ⬅ Prev
+            <div className="hero-retry">
+              <button className="btn-primary" type="button" onClick={refresh}>
+                <i className="fas fa-rotate-right" aria-hidden="true"></i> Reintentar
               </button>
+            </div>
+          </>
+        )}
 
-              <span className="page-info">
-                Page {page} of {totalPages}
-              </span>
+        {!isFirstLoad && !game && !error && (
+          <p className="no-games-message">No hay juegos con tráiler disponible.</p>
+        )}
 
-              <button
-                className="btn-nav"
-                type="button"
-                onClick={() => setPage((prev) => prev + 1)}
-                disabled={page >= totalPages}
-              >
-                Next ➡
-              </button>
-            </nav>
-          )}
-        </>
-      )}
+        {game && !error && (
+          <div className="hero">
+            <div className="hero-media">
+              {game.youtubeTrailer ? (
+                <div className="hero-video">
+                  <iframe
+                    title={`Tráiler de ${game.title}`}
+                    src={buildTrailerEmbedUrl(game.youtubeTrailer)}
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                </div>
+              ) : (
+                <div className="media-fallback">
+                  <i className="fas fa-film" aria-hidden="true"></i>
+                  <span>Sin tráiler disponible</span>
+                </div>
+              )}
 
-      {/* ================= VACÍO ================= */}
+              {game.imageOriginal && (
+                <img
+                  className="hero-poster"
+                  src={game.imageOriginal}
+                  alt={`Portada de ${game.title}`}
+                  loading="lazy"
+                  decoding="async"
+                />
+              )}
+            </div>
 
-      {!loading && !error && games.length === 0 && (
-        <div className="no-games-message">No games found</div>
-      )}
+            <div className="hero-body">
+              <h2 className="hero-title">{game.title}</h2>
+
+              {loading && (
+                <p className="hero-loading" role="status">
+                  Cargando otro juego…
+                </p>
+              )}
+
+              <dl className="hero-fields">
+                <div className="hero-field">
+                  <dt className="hero-label">Plataforma</dt>
+                  <dd className="hero-value">{orDash(game.platform)}</dd>
+                </div>
+
+                <div className="hero-field">
+                  <dt className="hero-label">Distribuidora</dt>
+                  <dd className="hero-value">{orDash(game.publisher)}</dd>
+                </div>
+
+                <div className="hero-field">
+                  <dt className="hero-label">Lanzamiento</dt>
+                  <dd className="hero-value">{orDash(game.releasedate)}</dd>
+                </div>
+
+                <div className="hero-field">
+                  <dt className="hero-label">Jugadores</dt>
+                  <dd className="hero-value">{orDash(game.players)}</dd>
+                </div>
+
+                <div className="hero-field">
+                  <dt className="hero-label">Género</dt>
+                  <dd className="hero-value">{orDash(game.genre)}</dd>
+                </div>
+              </dl>
+
+              <div className="hero-actions">
+                <Link className="btn-primary btn-secondary" to={`/game/${game.id}`}>
+                  <i className="fas fa-circle-play" aria-hidden="true"></i> Ver juego
+                </Link>
+
+                <button className="btn-primary" type="button" onClick={refresh} disabled={loading}>
+                  <i className="fas fa-dice" aria-hidden="true"></i> Otro juego al azar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

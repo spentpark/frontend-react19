@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   getGameById,
   getGames,
+  getRandomGame,
   searchGames,
   type ApiResponse,
-  type GameDetail
+  type GameDetail,
+  type RandomGame
 } from "../../services/gameService"
 
 import { http } from "../../services/http"
@@ -107,6 +109,25 @@ describe("gameService", () => {
     expect(http.get).toHaveBeenCalledWith("/games/1", { signal: undefined })
 
     expect(result).toEqual(mockResponse.data)
+  })
+
+  it("getRandomGame debe llamar a /games/random", async () => {
+    const randomGame: RandomGame = {
+      id: 1,
+      title: "Elden Ring",
+      platform: "PlayStation 5",
+      youtubeTrailer: "https://www.youtube.com/embed/elden-ring"
+    }
+
+    vi.mocked(http.get).mockResolvedValue({
+      data: randomGame
+    } as unknown as AxiosResponse<RandomGame>)
+
+    const result = await getRandomGame()
+
+    expect(http.get).toHaveBeenCalledWith("/games/random", { signal: undefined })
+
+    expect(result).toEqual(randomGame)
   })
 
   it("reenvía el AbortSignal a la petición para poder cancelarla", async () => {

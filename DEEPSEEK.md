@@ -5,9 +5,11 @@ Instructional context for AI agents working in this repository.
 ## Project Overview
 
 `frontend-react` is a **React 19 + TypeScript + Vite** single-page application (SPA) that
-consumes a **Game REST API**. It lets users browse a paginated list of games, filter them
-by platform through a hamburger side menu, search games by title, and open a detail view
-with metadata, YouTube videos and a Spotify soundtrack embed.
+consumes a **Game REST API**. The home screen shows a random game with its official trailer
+(automatically refreshed every 200 s, with a manual refresh button), and the catalog lets
+users browse a paginated list of games, filter them by platform through a hamburger side
+menu, search games by title, and open a detail view with metadata, YouTube videos and a
+Spotify soundtrack embed.
 
 The repository is a real deployment project (not just a scaffold): it ships a multi-stage
 `Dockerfile`, an Nginx config, and a full Jenkins CI/CD pipeline that publishes build
@@ -48,23 +50,25 @@ frontend-react19/
 ├── .env                        # Local environment variables (VITE_API_URL)
 └── src/
     ├── main.tsx                # React root, StrictMode, onUncaughtError, imports ./index.css
-    ├── App.tsx                 # Router only: Layout route + Home + lazy GameDetail
-    ├── App.css / index.css     # Global styles and component classes
+    ├── App.tsx                 # Router only: Layout route + Home + Catalog + lazy GameDetail
+    ├── App.css / index.css     # index.css: variables del tema y base; App.css: componentes
     ├── vite-env.d.ts           # Types VITE_API_URL on import.meta.env
     ├── components/
-    │   ├── Layout.tsx          # Header + <main> + footer, ErrorBoundary + Suspense around <Outlet/>
+    │   ├── Layout.tsx          # Header (marca, tema, menú) + contenido + footer
     │   ├── ErrorBoundary.tsx   # Class boundary that catches render errors
     │   ├── GameDetail.tsx      # Route /game/:id detail view + paginated reviews (lazy-loaded)
     │   ├── VideoEmbed.tsx      # Click-to-load YouTube facade
-    │   ├── HamburgerMenu.tsx   # Platform drawer (CSS classes, Escape, inert)
+    │   ├── HamburgerMenu.tsx   # Sidebar derecha de plataformas (Escape, inert, overlay)
+    │   ├── ThemeToggle.tsx     # Alterna tema claro/oscuro y lo guarda en localStorage
     │   └── __tests__/          # All component, page, service and http tests
     ├── pages/
-    │   └── Home.tsx            # List, debounced search, pagination, error/empty states
+    │   ├── Home.tsx            # `/`: random game + trailer, auto/manual refresh
+    │   └── Catalog.tsx         # `/catalog`: list, debounced search, pagination, error/empty states
     ├── config/
     │   └── environment.ts      # Exposes VITE_API_URL
     ├── services/
     │   ├── http.ts             # Shared axios instance + isCanceledError / isNotFoundError
-    │   ├── gameService.ts      # getGames, searchGames, getGameById
+    │   ├── gameService.ts      # getGames, searchGames, getGameById, getRandomGame
     │   ├── platformService.ts  # getPlatforms
     │   └── reviewService.ts    # getReviewsByGame (reseñas paginadas de 10 en 10)
     └── test/
@@ -130,7 +134,8 @@ tool from Jenkins.
 - No semicolons; **double quotes**; 2-space indentation; arrow-function components.
 - Comments are written in **Spanish** and often use banner separators, e.g.
   `/* ================= GAMES ================= */`. Keep this style when editing existing files.
-- UI copy is in English.
+- UI copy is mostly English; the Home (random game) screen keeps the Spanish copy inherited
+  from the original Thymeleaf design ("Descubre tu próximo juego", "Otro juego al azar"...).
 - Formatting is enforced by Prettier (`.prettierrc.json` mirrors the rules above:
   `semi: false`, `singleQuote: false`, `printWidth: 100`, `trailingComma: "none"`).
   Run `npm run format` after editing, and keep `npm run format:check` green.
@@ -138,19 +143,23 @@ tool from Jenkins.
   never disagree on style.
 
 **Architecture**
-- `App.tsx` is **router-only**: it declares the `Layout` route (with `Home` at `/` and a
-  lazily imported `GameDetail` at `/game/:id`) and nothing else. Page-level logic lives in
-  `src/pages/`, reusable UI in `src/components/`.
-- `Layout.tsx` owns the global header/footer and wraps `<Outlet />` in `ErrorBoundary` +
-  `Suspense`, so navigation chrome survives both render errors and lazy-chunk loading.
+- `App.tsx` is **router-only**: it declares the `Layout` route with `Home` at `/`
+  (random game), `Catalog` at `/catalog` (paginated list) and a lazily imported
+  `GameDetail` at `/game/:id`, and nothing else. Page-level logic lives in `src/pages/`,
+  reusable UI in `src/components/`.
+- `Layout.tsx` owns the global chrome: the `.header` (`.brand`, `ThemeToggle` and
+  `HamburgerMenu`), a `.content-wrap` > `.content` column that wraps `<Outlet />` in
+  `ErrorBoundary` + `Suspense`, and the footer. Pages render inside `.content` without their
+  own page margins.
 - Data access is isolated in `src/services/*`. Components must call services, never `axios` directly.
 - All requests go through the shared `http` instance in `src/services/http.ts`, which sets
   `baseURL` from `environment.apiUrl` and JSON headers.
 - Environment values are read only via `import.meta.env` inside `src/config/environment.ts`,
   typed in `src/vite-env.d.ts`.
-- The platform filter is **URL state**: `Home` reads `?platform=<description>` via
+- The platform filter is **URL state**: `Catalog` reads `?platform=<description>` via
   `useSearchParams` (falling back to `"Sony Playstation 4"`) and `HamburgerMenu` links to
-  `/?platform=<encoded description>`. Keep the filter in the URL so links stay shareable.
+  `/catalog?platform=<encoded description>` (plus an "Inicio" link to `/`). Keep the filter
+  in the URL so links stay shareable.
 - Changing the platform resets pagination to page 1 using React's documented
   "adjust state during render" pattern (comparing a `previousPlatform` state value), which
   avoids an extra request with the stale page.
@@ -164,8 +173,11 @@ tool from Jenkins.
   them as user-facing errors.
 - Guard against late state updates with `if (!controller.signal.aborted)` before
   `setLoading(false)` in the `finally` block.
-- Search input is debounced (`SEARCH_DEBOUNCE_MS = 350` in `Home.tsx`); the debounce sets the
-  committed `searchTerm` and resets the page. The submit button commits immediately.
+- `Home` refreshes the random game every `REFRESH_MS = 200000` ms and when the "Otro juego
+  al azar" button is pressed. Both paths bump a `requestId` state value consumed by the same
+  `useEffect`, so the cleanup aborts the in-flight request and clears the pending timer.
+- Search input is debounced (`SEARCH_DEBOUNCE_MS = 350` in `Catalog.tsx`); the debounce sets
+  the committed `searchTerm` and resets the page. The submit button commits immediately.
 
 **Typing**
 - `tsconfig.app.json` enables `strict`, `noUnusedLocals`, `noUnusedParameters` and
@@ -181,17 +193,29 @@ tool from Jenkins.
   TypeScript breaks the ESLint toolchain. Do not raise it until `typescript-eslint` supports it.
 
 **Styling**
-- Plain CSS with semantic class names (`game-list`, `styled-table`, `pagination`, `spinner`,
-  `video-container`, `game-detail-container`, `meta-label`, `section-title`) in
-  `App.css` / `index.css`. No CSS framework and **no inline styles** in components.
+- Design tokens live in `src/index.css` as CSS custom properties on `:root` and
+  `[data-theme="dark"]` (`--bg`, `--surface`, `--surface-2`, `--text`, `--muted`, `--accent`,
+  `--border`, `--input-bg`...). Components consume those variables instead of hardcoding
+  colours, so both themes stay consistent.
+- The SPA loads IBM Plex Sans/Mono and Font Awesome 6 from CDN `<link>`s in `index.html`; use
+  `<i className="fas fa-..." aria-hidden="true">` for icons. Icon-only buttons still need an
+  `aria-label` (tests and screen readers must not depend on the icon font).
+- Plain CSS with semantic class names (`header`, `sidebar`, `content`, `card`, `toolbar`,
+  `styled-table`, `page-head`, `hero`, `btn-primary`, `btn-pagination`,
+  `game-detail-container`, `meta-label`, `section-title`) in `App.css`. No CSS framework and
+  **no inline styles** in components.
 - `.sr-only` provides visually-hidden labels (search input, table caption).
-- Heading hierarchy is `h1` per page (`.title` in `Home`, `.game-info h1` in `GameDetail`)
+- Heading hierarchy is `h1` per page (`.page-head h1` in `Home`, `Catalog` and `GameDetail`)
   with `h2` for every section, so no levels are skipped.
 
 **Accessibility**
-- The hamburger button exposes `aria-expanded` / `aria-controls`; the drawer is a `<nav>`
-  marked `inert` while closed (React 19 supports the boolean `inert` prop) and closes on
-  Escape. The overlay is a real `<button>` with an `aria-label`.
+- The hamburger button (`aria-label="Open menu"`) exposes `aria-expanded` / `aria-controls`;
+  the drawer is a right `<aside>` marked `aria-hidden` + `inert` while closed (React 19
+  supports the boolean `inert` prop) and closes on Escape or overlay click. The overlay is a
+  real `<button>` with an `aria-label`.
+- `ThemeToggle` exposes `aria-label` ("Switch to dark/light theme") and persists the choice
+  in `localStorage` under `spentpark-theme`; the inline script in `index.html` applies it
+  before the first paint to avoid a theme flash.
 - Every `iframe` needs a unique, descriptive `title` (e.g. `` `${game.title} - ${label}` ``).
 - Heavy third-party embeds (YouTube) are click-to-load facades via `VideoEmbed`; images use
   `loading="lazy"` and `decoding="async"`.
@@ -203,8 +227,11 @@ tool from Jenkins.
   `vi.mock("../../services/http")` for services; reset state with `vi.clearAllMocks()` in `beforeEach`.
 - Query by user-visible text/placeholder (`findByText`, `findByPlaceholderText`) and use
   `waitFor` for async assertions. Assert forwarded signals with `expect.any(AbortSignal)`.
-- `App.test.tsx` renders the real `<App />` (BrowserRouter), so it resets the URL with
-  `window.history.pushState({}, "", "/")` in `beforeEach` to avoid leaking `?platform=` between tests.
+- `App.test.tsx` renders the real `<App />` (BrowserRouter) in two suites: it pushes `/` for
+  the Home tests and `/catalog` for the catalog tests in `beforeEach`, so `?platform=` does
+  not leak between tests.
+- `ThemeToggle.test.tsx` clears `localStorage` and removes the `data-theme` attribute in
+  `beforeEach`/`afterEach`, because the theme is global to the document.
 - `src/test/setup.ts` must import `"@testing-library/jest-dom/vitest"` (not the bare
   `"@testing-library/jest-dom"`): only the `/vitest` entrypoint augments Vitest's
   `Assertion` interface, so the bare import makes `tsc -b` fail on matchers such as
@@ -223,6 +250,7 @@ Base URL: `VITE_API_URL`.
 | GET | `/games` | `platform`, `page`, `limit` | `ApiResponse` (`{ data: Game[], pagination }`) |
 | GET | `/games/search` | `title`, `page`, `limit` | `ApiResponse` |
 | GET | `/games/:id` | — | `GameDetail` |
+| GET | `/games/random` | — | `RandomGame` (`id`, `title`, `platform`, `publisher`, `releasedate`, `players`, `genre`, `imageOriginal`, `youtubeTrailer`; 404 si no hay ninguno con tráiler) |
 | GET | `/platforms` | `limit` | `Platform[]` (desenvuelve `{ data, pagination }`) |
 | GET | `/reviews/:id` | `page`, `limit` | `ReviewsResponse` (`{ data: Review[], pagination }`) |
 
@@ -233,6 +261,9 @@ All of them are called with an optional `AbortSignal` as described in *Data fetc
 - `coverage/` is generated output and **is tracked in git**; regenerate it, never hand-edit it.
   It is listed in `globalIgnores` in `eslint.config.js` and in `.prettierignore`, so it no
   longer pollutes `npm run lint` or `npm run format`.
+- `index.html` loads IBM Plex and Font Awesome 6 from CDNs; without network the layout still
+  works but custom fonts/icons are missing. Icon-only controls keep `aria-label`s for this
+  reason (and for the jsdom tests).
 - `eslint-plugin-jsx-a11y` (6.10.2) and `eslint-plugin-react` (7.37.5) only declare peer
   support up to ESLint 9, so they are deliberately **not** installed alongside ESLint 10.
   Revisit when they widen their peer range.

@@ -25,6 +25,19 @@ export interface GameDetail {
   spotify_ost?: string
 }
 
+/* Juego al azar que alimenta la pantalla de inicio */
+export interface RandomGame {
+  id: number
+  title: string
+  platform?: string | null
+  publisher?: string | null
+  releasedate?: string | null
+  players?: string | null
+  genre?: string | null
+  imageOriginal?: string | null
+  youtubeTrailer: string
+}
+
 export interface Pagination {
   currentPage: number
   perPage: number
@@ -73,6 +86,13 @@ export const getGameById = async (
   signal?: AbortSignal
 ): Promise<GameDetail> => {
   const response = await http.get<GameDetail>(`/games/${id}`, { signal })
+
+  return response.data
+}
+
+/* JUEGO AL AZAR CON TRÁILER */
+export const getRandomGame = async (signal?: AbortSignal): Promise<RandomGame> => {
+  const response = await http.get<RandomGame>("/games/random", { signal })
 
   return response.data
 }

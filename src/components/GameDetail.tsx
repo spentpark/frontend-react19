@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { getGameById, type GameDetail as GameDetailModel } from "../services/gameService"
 import { getReviewsByGame, REVIEWS_PAGE_SIZE, type Review } from "../services/reviewService"
@@ -27,12 +27,12 @@ interface DetailMessageProps {
 /* Mensaje con acción de volver, usado cuando no hay juego que mostrar */
 const DetailMessage = ({ message, onBack }: DetailMessageProps) => (
   <div className="game-detail-container">
-    <p className="error-message" role="alert">
+    <div className="error-message" role="alert">
       {message}
-    </p>
+    </div>
 
     <button className="back-btn" type="button" onClick={onBack}>
-      ⬅ Back
+      <i className="fas fa-arrow-left" aria-hidden="true"></i> Back
     </button>
   </div>
 )
@@ -133,20 +133,36 @@ function GameDetail() {
 
   if (loading) {
     return (
-      <output className="loading-container">
+      <div className="loading-container">
         <div className="spinner"></div>
         <p>Loading game...</p>
-      </output>
+      </div>
     )
   }
 
   if (error) return <DetailMessage message={error} onBack={goBack} />
 
-  if (!game) return <p>Game not found</p>
+  if (!game) return <p className="empty-state">Game not found</p>
 
   return (
     <div className="game-detail-container">
-      {/* ================= HEADER ================= */}
+      {/* ================= CABECERA DE PÁGINA ================= */}
+
+      <div className="page-head">
+        <nav className="breadcrumb" aria-label="Ruta de navegación">
+          <Link to="/">Inicio</Link>
+          <span aria-hidden="true">/</span>
+          <Link to="/catalog">Games</Link>
+          <span aria-hidden="true">/</span>
+          <strong>Detalle</strong>
+        </nav>
+
+        <h1>{game.title}</h1>
+        <p>{game.description}</p>
+      </div>
+
+      {/* ================= PORTADA + META ================= */}
+
       <div className="game-header">
         {game.image_Large && (
           <img
@@ -158,142 +174,144 @@ function GameDetail() {
           />
         )}
 
-        <div className="game-info">
-          <h1>{game.title}</h1>
-          <p className="description">{game.description}</p>
-        </div>
-      </div>
-
-      {/* ================= META ================= */}
-      <div className="game-meta">
-        <div className="meta-card">
-          <h2 className="meta-label">Platform</h2>
-          <p>{game.Platform}</p>
-        </div>
-
-        <div className="meta-card">
-          <h2 className="meta-label">Publisher</h2>
-          <p>{game.Publisher}</p>
-        </div>
-
-        <div className="meta-card">
-          <h2 className="meta-label">Genre</h2>
-          <p>{game.genre}</p>
-        </div>
-
-        <div className="meta-card">
-          <h2 className="meta-label">Players</h2>
-          <p>{game.players}</p>
-        </div>
-
-        <div className="meta-card">
-          <h2 className="meta-label">Release</h2>
-          <p>{game.releasedate}</p>
-        </div>
-      </div>
-
-      {/* ================= VIDEOS ================= */}
-
-      {VIDEOS.map((video) => (
-        <VideoEmbed
-          key={video.label}
-          label={video.label}
-          gameTitle={game.title}
-          url={game[video.field]}
-        />
-      ))}
-
-      {/* ================= SPOTIFY ================= */}
-
-      {game.spotify_ost && (
-        <>
-          <h2 className="section-title">Original Soundtrack</h2>
-
-          <div className="spotify-container">
-            <iframe
-              title={`${game.title} - Original Soundtrack`}
-              src={getSpotifyEmbedUrl(game.spotify_ost)}
-              height="152"
-              loading="lazy"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            ></iframe>
+        <div className="game-meta">
+          <div className="meta-card">
+            <h2 className="meta-label">Platform</h2>
+            <p>{game.Platform}</p>
           </div>
-        </>
-      )}
 
-      {/* ================= REVIEWS ================= */}
+          <div className="meta-card">
+            <h2 className="meta-label">Publisher</h2>
+            <p>{game.Publisher}</p>
+          </div>
 
-      <h2 className="section-title">Reviews</h2>
+          <div className="meta-card">
+            <h2 className="meta-label">Genre</h2>
+            <p>{game.genre}</p>
+          </div>
 
-      {reviewsLoading && (
-        <output className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading reviews...</p>
-        </output>
-      )}
+          <div className="meta-card">
+            <h2 className="meta-label">Players</h2>
+            <p>{game.players}</p>
+          </div>
 
-      {reviewsError && (
-        <div className="error-message" role="alert">
-          {reviewsError}
+          <div className="meta-card">
+            <h2 className="meta-label">Release</h2>
+            <p>{game.releasedate}</p>
+          </div>
         </div>
-      )}
+      </div>
 
-      {!reviewsLoading && !reviewsError && reviews.length === 0 && (
-        <p className="no-reviews-message">No reviews yet</p>
-      )}
+      {/* ================= VÍDEOS + SPOTIFY ================= */}
 
-      {reviews.length > 0 && (
-        <>
-          <ul className="review-list">
-            {reviews.map((review) => (
-              <li key={review.id} className="review-card">
-                <div className="review-header">
-                  <span className="review-source">{review.source}</span>
+      <section className="card detail-card" aria-label="Videos">
+        {VIDEOS.map((video) => (
+          <VideoEmbed
+            key={video.label}
+            label={video.label}
+            gameTitle={game.title}
+            url={game[video.field]}
+          />
+        ))}
 
-                  {review.score && <span className="review-score">{review.score}</span>}
+        {game.spotify_ost && (
+          <>
+            <h2 className="section-title">Original Soundtrack</h2>
+
+            <div className="spotify-container">
+              <iframe
+                title={`${game.title} - Original Soundtrack`}
+                src={getSpotifyEmbedUrl(game.spotify_ost)}
+                height="152"
+                loading="lazy"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              ></iframe>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* ================= RESEÑAS ================= */}
+
+      <section className="card detail-card" aria-label="Reviews">
+        <h2 className="section-title">Reviews</h2>
+
+        {reviewsLoading && (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Loading reviews...</p>
+          </div>
+        )}
+
+        {reviewsError && (
+          <div className="error-message" role="alert">
+            {reviewsError}
+          </div>
+        )}
+
+        {!reviewsLoading && !reviewsError && reviews.length === 0 && (
+          <p className="no-reviews-message">No reviews yet</p>
+        )}
+
+        {reviews.length > 0 && (
+          <>
+            <ul className="review-list">
+              {reviews.map((review) => (
+                <li key={review.id} className="review-card">
+                  <div className="review-header">
+                    <span className="review-source">{review.source}</span>
+
+                    {review.score && <span className="review-score">{review.score}</span>}
+                  </div>
+
+                  {review.name && <p className="review-author">{review.name}</p>}
+
+                  {review.date && <p className="review-date">{review.date}</p>}
+
+                  <p className="review-text">{review.review}</p>
+                </li>
+              ))}
+            </ul>
+
+            {reviewsTotalPages > 1 && (
+              <div className="pagination-container">
+                <div className="pagination-wrapper">
+                  <div className="page-info">
+                    Page <strong>{reviewsPage}</strong> of <strong>{reviewsTotalPages}</strong>
+                  </div>
+
+                  <div className="page-buttons">
+                    <button
+                      className="btn-pagination"
+                      type="button"
+                      aria-label="Previous reviews page"
+                      onClick={() => setReviewsPage((prev) => prev - 1)}
+                      disabled={reviewsPage <= 1}
+                    >
+                      <i className="fas fa-angle-left" aria-hidden="true"></i> Prev
+                    </button>
+
+                    <button
+                      className="btn-pagination primary"
+                      type="button"
+                      aria-label="Next reviews page"
+                      onClick={() => setReviewsPage((prev) => prev + 1)}
+                      disabled={reviewsPage >= reviewsTotalPages}
+                    >
+                      Next <i className="fas fa-angle-right" aria-hidden="true"></i>
+                    </button>
+                  </div>
                 </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
-                {review.name && <p className="review-author">{review.name}</p>}
-
-                {review.date && <p className="review-date">{review.date}</p>}
-
-                <p className="review-text">{review.review}</p>
-              </li>
-            ))}
-          </ul>
-
-          {reviewsTotalPages > 1 && (
-            <nav className="pagination" aria-label="Reviews pagination">
-              <button
-                className="btn-nav"
-                type="button"
-                onClick={() => setReviewsPage((prev) => prev - 1)}
-                disabled={reviewsPage <= 1}
-              >
-                ⬅ Prev
-              </button>
-
-              <span className="page-info">
-                Page {reviewsPage} of {reviewsTotalPages}
-              </span>
-
-              <button
-                className="btn-nav"
-                type="button"
-                onClick={() => setReviewsPage((prev) => prev + 1)}
-                disabled={reviewsPage >= reviewsTotalPages}
-              >
-                Next ➡
-              </button>
-            </nav>
-          )}
-        </>
-      )}
-
-      {/* ================= BACK ================= */}
+      {/* ================= VOLVER ================= */}
 
       <button className="back-btn" type="button" onClick={goBack}>
-        ⬅ Back
+        <i className="fas fa-arrow-left" aria-hidden="true"></i> Back
       </button>
     </div>
   )

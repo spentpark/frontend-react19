@@ -6,10 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Explorador de videojuegos: listado por plataforma, búsqueda por título y ficha de detalle con tráilers y banda sonora."
+      content="Explorador de videojuegos: juego al azar con tráiler, catálogo por plataforma, búsqueda por título y ficha de detalle."
     />
-    <meta name="theme-color" content="#3498db" />
-    <title>Frontend Game React</title>
+    <meta name="theme-color" content="#0e1726" />
+    <title>Spentpark Games</title>
+
+    <!-- Aplica el tema guardado antes de pintar la página (evita el parpadeo) -->
+    <script>
+      ;(function () {
+        try {
+          var theme = localStorage.getItem("spentpark-theme")
+          if (theme === "dark" || theme === "light") {
+            document.documentElement.setAttribute("data-theme", theme)
+          }
+        } catch (error) {
+          /* almacenamiento bloqueado: se usa el tema claro */
+        }
+      })()
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
   </head>
   <body>
     <div id="root"></div>

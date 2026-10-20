@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 
 import { getPlatforms, type Platform } from "../services/platformService"
 import { isCanceledError } from "../services/http"
@@ -8,6 +8,9 @@ const HamburgerMenu = () => {
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+
+  const [searchParams] = useSearchParams()
+  const activePlatform = searchParams.get("platform")
 
   useEffect(() => {
     const controller = new AbortController()
@@ -52,60 +55,70 @@ const HamburgerMenu = () => {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [open])
 
+  const closeMenu = () => setOpen(false)
+
   return (
     <>
       {/* BOTÓN HAMBURGUESA */}
       <button
-        className="menu-btn"
+        className="icon-btn"
         type="button"
-        aria-label="Open platforms menu"
+        aria-label="Open menu"
         aria-expanded={open}
         aria-controls="platform-menu"
         onClick={() => setOpen((prev) => !prev)}
       >
-        ☰
+        <i className="fas fa-bars" aria-hidden="true"></i>
       </button>
 
       {/* OVERLAY */}
       {open && (
-        <button
-          className="overlay"
-          type="button"
-          aria-label="Close platforms menu"
-          onClick={() => setOpen(false)}
-        />
+        <button className="overlay" type="button" aria-label="Close menu" onClick={closeMenu} />
       )}
 
-      {/* MENÚ */}
-      <nav
+      {/* SIDEBAR */}
+      <aside
         id="platform-menu"
-        className={open ? "side-menu open" : "side-menu"}
-        aria-label="Platforms"
+        className={open ? "sidebar open" : "sidebar"}
+        aria-label="Platforms menu"
+        aria-hidden={!open}
         inert={!open}
       >
-        <h2 className="side-menu-title">Plataformas</h2>
+        <div className="sidebar-head">
+          <span>Plataformas</span>
 
-        <ul>
-          {platforms.length === 0 && <li>No platforms</li>}
+          <button className="icon-btn" type="button" aria-label="Close menu" onClick={closeMenu}>
+            <i className="fas fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <nav>
+          <Link to="/" onClick={closeMenu}>
+            <i className="fas fa-house" aria-hidden="true"></i>
+            <span>Inicio</span>
+          </Link>
+
+          {platforms.length === 0 && <span className="sidebar-empty">No platforms</span>}
 
           {platforms.map((platform) => (
-            <li key={platform.id}>
-              <Link
-                to={`/?platform=${encodeURIComponent(platform.description)}`}
-                onClick={() => setOpen(false)}
-              >
-                {platform.description}
-              </Link>
-            </li>
+            <Link
+              key={platform.id}
+              to={`/catalog?platform=${encodeURIComponent(platform.description)}`}
+              className={activePlatform === platform.description ? "active" : undefined}
+              onClick={closeMenu}
+            >
+              <i className="fas fa-gamepad" aria-hidden="true"></i>
+              <span>{platform.description}</span>
+            </Link>
           ))}
-        </ul>
+        </nav>
 
         {error && (
-          <p className="side-menu-error" role="alert">
+          <p className="sidebar-error" role="alert">
             {error}
           </p>
         )}
-      </nav>
+      </aside>
     </>
   )
 }

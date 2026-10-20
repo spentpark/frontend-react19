@@ -27,7 +27,8 @@ function VideoEmbed({ label, gameTitle, url }: Readonly<VideoEmbedProps>) {
           ></iframe>
         ) : (
           <button className="video-placeholder" type="button" onClick={() => setActive(true)}>
-            ▶ Play {label}
+            <i className="fas fa-play" aria-hidden="true"></i>
+            <span>Play {label}</span>
           </button>
         )}
       </div>
