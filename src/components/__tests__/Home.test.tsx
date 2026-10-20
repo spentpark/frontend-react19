@@ -67,10 +67,8 @@ describe("Home (juego al azar)", () => {
       "https://www.youtube.com/embed/elden-ring?autoplay=1"
     )
 
-    expect(screen.getByAltText("Portada de Elden Ring")).toHaveAttribute(
-      "src",
-      "https://img.test/elden-ring.jpg"
-    )
+    /* La pantalla solo muestra el vídeo del tráiler, sin portada debajo */
+    expect(screen.queryByRole("img")).toBeNull()
   })
 
   it("convierte una URL de YouTube de tipo watch en URL embebible", async () => {

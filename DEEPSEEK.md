@@ -176,6 +176,8 @@ tool from Jenkins.
 - `Home` refreshes the random game every `REFRESH_MS = 200000` ms and when the "Otro juego
   al azar" button is pressed. Both paths bump a `requestId` state value consumed by the same
   `useEffect`, so the cleanup aborts the in-flight request and clears the pending timer.
+- `getRandomGame` sets a 15 s axios timeout so the Home screen cannot stay in its loading
+  state forever when the backend stops responding.
 - Search input is debounced (`SEARCH_DEBOUNCE_MS = 350` in `Catalog.tsx`); the debounce sets
   the committed `searchTerm` and resets the page. The submit button commits immediately.
 

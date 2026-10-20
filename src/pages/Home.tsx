@@ -142,16 +142,6 @@ function Home() {
                   <span>Sin tráiler disponible</span>
                 </div>
               )}
-
-              {game.imageOriginal && (
-                <img
-                  className="hero-poster"
-                  src={game.imageOriginal}
-                  alt={`Portada de ${game.title}`}
-                  loading="lazy"
-                  decoding="async"
-                />
-              )}
             </div>
 
             <div className="hero-body">

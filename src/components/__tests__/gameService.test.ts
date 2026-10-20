@@ -125,7 +125,10 @@ describe("gameService", () => {
 
     const result = await getRandomGame()
 
-    expect(http.get).toHaveBeenCalledWith("/games/random", { signal: undefined })
+    expect(http.get).toHaveBeenCalledWith("/games/random", {
+      signal: undefined,
+      timeout: 15000
+    })
 
     expect(result).toEqual(randomGame)
   })

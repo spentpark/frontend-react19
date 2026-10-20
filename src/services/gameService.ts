@@ -90,9 +90,16 @@ export const getGameById = async (
   return response.data
 }
 
+/* Evita que la pantalla de inicio se quede cargando indefinidamente si el
+   backend no responde */
+const RANDOM_GAME_TIMEOUT_MS = 15000
+
 /* JUEGO AL AZAR CON TRÁILER */
 export const getRandomGame = async (signal?: AbortSignal): Promise<RandomGame> => {
-  const response = await http.get<RandomGame>("/games/random", { signal })
+  const response = await http.get<RandomGame>("/games/random", {
+    signal,
+    timeout: RANDOM_GAME_TIMEOUT_MS
+  })
 
   return response.data
 }
