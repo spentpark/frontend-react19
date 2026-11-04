@@ -60,8 +60,25 @@ export const NEWS_PAGE_SIZE = 10
  * URL del listado de noticias. Vive en el backend `rss-game-node` (puerto 3001
  * en desarrollo), distinto del backend del catálogo; el JWT es válido en ambos
  * porque comparten secreto, `issuer` y `audience`.
+ *
+ * Admite una URL absoluta (`http://host:3001/api`) o una ruta relativa
+ * (`/news-api`) resuelta contra el origen de la página. En Docker se usa la
+ * ruta relativa porque Nginx hace de proxy inverso bajo el mismo origen, así
+ * que la app funciona abierta por localhost, por la IP de la LAN o por la IP
+ * pública.
  */
-export const NEWS_BASE_URL = `${environment.newsApiUrl}/game-news`
+export function resolveNewsBaseUrl(value: string): string {
+  const configured = (value ?? "").trim().replace(/\/+$/, "")
+
+  if (!configured || /^https?:\/\//i.test(configured)) {
+    return configured
+  }
+
+  const origin = typeof window === "undefined" ? "" : window.location.origin
+  return `${origin}${configured}`
+}
+
+export const NEWS_BASE_URL = `${resolveNewsBaseUrl(environment.newsApiUrl ?? "")}/game-news`
 
 /** Página vacía de noticias: valor por defecto mientras carga o si falla la petición. */
 export const EMPTY_NEWS_PAGE: GameNewsPage = {

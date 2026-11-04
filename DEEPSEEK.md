@@ -45,8 +45,9 @@ frontend-react19/
 ├── tsconfig.json               # Solution file -> references app + node configs
 ├── tsconfig.app.json           # App compiler options (strict, bundler resolution)
 ├── tsconfig.node.json          # Config for build tooling
-├── Dockerfile                  # 2-stage build: node:24-alpine -> nginx:alpine
-├── nginx.conf                  # SPA fallback (try_files ... /index.html) on :8065
+├── Dockerfile                  # 2-stage build: node:24-alpine -> nginx:alpine (ARGs VITE_*)
+├── .dockerignore               # Excluye node_modules, dist, coverage, .git del contexto de build
+├── nginx.conf                  # SPA fallback + proxy inverso `/api` y `/news-api` on :8065
 ├── Jenkinsfile                 # CI/CD pipeline (test, build, SonarQube, Nexus)
 ├── .env                        # Variables locales (VITE_API_URL, VITE_NEWS_API_URL y credenciales del JWT)
 └── src/
@@ -106,6 +107,12 @@ development credentials used to obtain the JWT from `POST /api/auth/login` (shar
 backend-node20/rss-game-node, so the same token is valid in both backends). Do not ship real
 production credentials in the bundle.
 
+Those absolute `http://localhost` values are for **`npm run dev`** with the backends running
+natively. In Docker the image is built with relative paths instead (`VITE_API_URL=/api`,
+`VITE_NEWS_API_URL=/news-api`) and Nginx proxies them under the same origin, so the browser
+works from `localhost`, the LAN IP or the public IP without rebuilds (see
+*Container / Deployment*).
+
 Key commands:
 
 | Command | Purpose |
@@ -123,14 +130,33 @@ Key commands:
 
 ### Container / Deployment
 
+The image builds with `node:24-alpine` and serves the static bundle from `nginx:alpine` on
+port **8065**. `nginx.conf` rewrites unknown paths to `/index.html` so client-side routes
+(e.g. `/game/42`) work on refresh, and **reverse-proxies the APIs under the same origin**:
+
+| Public path | Upstream (Compose service) |
+| --- | --- |
+| `/api/` | `http://backend:7000/api/` (backend-python) |
+| `/news-api/` | `http://news:3001/api/` (rss-game-node) |
+
+That is why the Docker build bakes relative URLs (`ARG VITE_API_URL=/api`,
+`ARG VITE_NEWS_API_URL=/news-api`): the browser always calls the origin it used to open the
+app (LAN IP, public IP or domain), so `localhost` never leaks into the bundle and no CORS is
+needed. `newsService.resolveNewsBaseUrl` resolves the relative `/news-api` against
+`window.location.origin`. Override the build args to call a different backend directly:
+
 ```bash
-docker build -t frontend-react .
-docker run -p 8065:8065 frontend-react
+docker build -t frontend-react \
+  --build-arg VITE_API_URL=http://200.83.105.123:7000/api \
+  --build-arg VITE_NEWS_API_URL=http://200.83.105.123:3001/api .
 ```
 
-The image builds with `node:24-alpine` and serves the static bundle from
-`nginx:alpine` on port **8065**. `nginx.conf` rewrites unknown paths to
-`/index.html` so client-side routes (e.g. `/game/42`) work on refresh.
+The supported way to run the full stack is the sibling `C:\git\docker-compose.yml`
+(`docker compose up -d --build`), which starts `backend`, `news` and `frontend` on the same
+network. Because Nginx resolves `backend`/`news` at startup, the image expects that Compose
+network (a bare `docker run` without them fails with "host not found in upstream"). The
+`.dockerignore` keeps `node_modules`/`dist` out of the build context: copying Windows
+`node_modules` into the Linux image would break native bindings and bloat the context.
 
 ### CI/CD (Jenkinsfile)
 
@@ -178,7 +204,10 @@ tool from Jenkins.
   (`VITE_NEWS_API_URL`, port 3001) instead of backend-python. `newsService.fetchNewsPage`
   calls it through the shared `http` instance using an absolute URL, so the `Bearer`
   interceptor and the single `401` refresh+retry also apply; the JWT is accepted by both
-  backends (same secret, `issuer` and `audience`). The RSS feed ships `description` as HTML:
+  backends (same secret, `issuer` and `audience`). `newsService.resolveNewsBaseUrl` accepts
+  either an absolute URL (dev: `http://localhost:3001/api`) or a relative one (Docker:
+  `/news-api`, resolved against `window.location.origin`), because in Docker Nginx proxies
+  the news service under the frontend's own origin. The RSS feed ships `description` as HTML:
   the service converts it to plain text (`stripHtml`) and the page never injects HTML
   (`dangerouslySetInnerHTML` is not used) — image URLs are extracted from the feed markup
   with `extractFirstImage`.
@@ -302,8 +331,10 @@ All of them are called with an optional `AbortSignal` as described in *Data fetc
 
 ### News service (`VITE_NEWS_API_URL`)
 
-Base URL: `VITE_NEWS_API_URL` → **rss-game-node** on `http://localhost:3001/api` (port 3001,
-a different backend from the catalog). The JWT HS256 is shared with backend-python (same
+Base URL in dev: `VITE_NEWS_API_URL` → **rss-game-node** on `http://localhost:3001/api` (port
+3001, a different backend from the catalog). In Docker the base URL is the relative
+`/news-api`, which `resolveNewsBaseUrl` turns into `<origin>/news-api` and Nginx proxies to
+`http://news:3001/api`. The JWT HS256 is shared with backend-python (same
 secret/`issuer`/`audience`), so the token cached by `auth.ts` is valid there.
 
 | Method | Endpoint | Params | Returns |
@@ -312,9 +343,9 @@ secret/`issuer`/`audience`), so the token cached by `auth.ts` is valid there.
 
 `newsService.unwrapNewsPage` tolerates the raw document shape (`_id`, `published_at`,
 `description` with HTML), the `news`/`articles`/`items` aliases and plain arrays (paginated
-in the client). The news backend must allow the frontend origin in CORS: any `localhost`
-port is allowed outside production, and production origins must be listed in the backend's
-`CORS_ORIGINS`.
+in the client). CORS is only relevant when the news backend is called **directly** (dev):
+any `localhost` port is allowed outside production, and production origins must be listed in
+the backend's `CORS_ORIGINS`.
 
 ## Gotchas
 
@@ -322,9 +353,16 @@ port is allowed outside production, and production origins must be listed in the
   It is listed in `globalIgnores` in `eslint.config.js` and in `.prettierignore`, so it no
   longer pollutes `npm run lint` or `npm run format`.
 - `/news` is the only screen that talks to a second backend (`VITE_NEWS_API_URL`, port 3001).
-  Without that variable in `.env`, `newsService.NEWS_BASE_URL` becomes `undefined/game-news`
-  and the page falls back to its error state; the news backend must also allow the frontend
-  origin in CORS (all `localhost` ports are allowed in development).
+  In dev it is an absolute `http://localhost:3001/api`; in Docker it is the relative
+  `/news-api` that Nginx proxies to the `news` Compose service (no CORS needed). If the
+  variable is missing the page falls back to its error state.
+- **Docker changes need a rebuild**: `nginx.conf`, the `Dockerfile` and the `VITE_*` build
+  args are baked into the image, so run `docker compose up -d --build` (from `C:\git`) after
+  editing them. A bare `docker run` of the frontend image fails ("host not found in
+  upstream") because Nginx resolves the `backend`/`news` Compose services at startup.
+- `.dockerignore` is required in this repo: without it `COPY . .` would pull the Windows
+  `node_modules` into the Linux image (broken native bindings, huge build context) and a
+  stale `dist/`.
 - `index.html` loads IBM Plex and Font Awesome 6 from CDNs; without network the layout still
   works but custom fonts/icons are missing. Icon-only controls keep `aria-label`s for this
   reason (and for the jsdom tests).

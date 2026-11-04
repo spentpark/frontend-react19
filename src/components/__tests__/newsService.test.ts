@@ -25,6 +25,7 @@ import {
   extractFirstImage,
   fetchNewsPage,
   formatNewsDate,
+  resolveNewsBaseUrl,
   stripHtml,
   toNewsItem,
   unwrapNewsPage,
@@ -68,6 +69,12 @@ describe("newsService", () => {
 
   it("apunta al servicio game-news del backend de noticias", () => {
     expect(NEWS_BASE_URL).toBe("http://localhost:3001/api/game-news")
+  })
+
+  it("resuelve una ruta relativa del proxy contra el origen de la página", () => {
+    expect(resolveNewsBaseUrl("/news-api/")).toBe(`${window.location.origin}/news-api`)
+    expect(resolveNewsBaseUrl("http://localhost:3001/api/")).toBe("http://localhost:3001/api")
+    expect(resolveNewsBaseUrl("https://api.example.com")).toBe("https://api.example.com")
   })
 
   it("pide la página indicada con el límite y la señal de cancelación", async () => {

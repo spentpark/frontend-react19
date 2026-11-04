@@ -1,0 +1,18 @@
+# Dependencias y artefactos de build locales: se instalan/generan dentro de la
+# imagen, nunca se copian desde el host (en Windows traerían binarios nativos
+# incompatibles con Linux y un contexto de build enorme).
+node_modules
+dist
+coverage
+
+# Control de versiones, CI y documentación
+.git
+.gitignore
+.dockerignore
+Jenkinsfile
+*.md
+
+# Variables locales de otros entornos. El `.env` de desarrollo sí se copia
+# porque el build de Vite lo usa para las credenciales del login.
+.env.local
+.env.*.local
