@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import App from "../../App"
 
 import * as gameService from "../../services/gameService"
+import * as newsService from "../../services/newsService"
 import * as platformService from "../../services/platformService"
 import * as reviewService from "../../services/reviewService"
 
@@ -17,6 +18,12 @@ vi.mock("../../services/reviewService", () => ({
   getReviewsByGame: vi.fn(),
   REVIEWS_PAGE_SIZE: 10
 }))
+
+/* Las noticias también se cargan de forma perezosa: se mockea la petición HTTP */
+vi.mock("../../services/newsService", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../services/newsService")>()
+  return { ...actual, fetchNewsPage: vi.fn() }
+})
 
 const mockGamesResponse = {
   data: [
@@ -55,6 +62,11 @@ beforeEach(() => {
   vi.spyOn(platformService, "getPlatforms").mockResolvedValue(mockPlatforms)
 
   vi.mocked(reviewService.getReviewsByGame).mockResolvedValue({
+    data: [],
+    pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
+  })
+
+  vi.mocked(newsService.fetchNewsPage).mockResolvedValue({
     data: [],
     pagination: { currentPage: 1, perPage: 10, totalRecords: 0, totalPages: 0 }
   })
@@ -376,5 +388,42 @@ describe("App / Catalog", () => {
     render(<App />)
 
     expect(await screen.findByText(/No games found/)).toBeInTheDocument()
+  })
+})
+
+describe("App / News", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/news")
+  })
+
+  it("renderiza la página de noticias en /news", async () => {
+    render(<App />)
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Noticias de videojuegos" })
+    ).toBeInTheDocument()
+
+    expect(newsService.fetchNewsPage).toHaveBeenCalledWith(1, 10, expect.any(AbortSignal))
+
+    expect(
+      await screen.findByText("No hay noticias disponibles por el momento.")
+    ).toBeInTheDocument()
+  })
+
+  it("navega a noticias desde el menú lateral", async () => {
+    window.history.pushState({}, "", "/")
+
+    vi.spyOn(gameService, "getRandomGame").mockResolvedValue(mockRandomGame)
+
+    render(<App />)
+
+    await screen.findByText("Descubre tu próximo juego")
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }))
+    fireEvent.click(screen.getByRole("link", { name: "Noticias" }))
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Noticias de videojuegos" })
+    ).toBeInTheDocument()
   })
 })

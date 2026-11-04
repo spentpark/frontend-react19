@@ -18,9 +18,9 @@ const mockPlatforms = [
   }
 ]
 
-const renderMenu = () =>
+const renderMenu = (path = "/") =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <HamburgerMenu />
     </MemoryRouter>
   )
@@ -145,6 +145,24 @@ describe("HamburgerMenu", () => {
     await screen.findByText("PlayStation 4")
 
     expect(screen.getByRole("link", { name: "Inicio" })).toHaveAttribute("href", "/")
+  })
+
+  it("enlaza a la página de noticias", async () => {
+    renderMenu()
+
+    openMenu()
+
+    await screen.findByText("PlayStation 4")
+
+    expect(screen.getByRole("link", { name: "Noticias" })).toHaveAttribute("href", "/news")
+  })
+
+  it("marca Noticias como activo en su ruta", () => {
+    renderMenu("/news")
+
+    openMenu()
+
+    expect(screen.getByRole("link", { name: "Noticias" })).toHaveClass("active")
   })
 
   it("avisa cuando la API no devuelve un array", async () => {

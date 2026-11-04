@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useSearchParams } from "react-router-dom"
 
 import { getPlatforms, type Platform } from "../services/platformService"
 import { isCanceledError } from "../services/http"
@@ -11,6 +11,9 @@ const HamburgerMenu = () => {
 
   const [searchParams] = useSearchParams()
   const activePlatform = searchParams.get("platform")
+
+  const { pathname } = useLocation()
+  const isNewsActive = pathname === "/news"
 
   useEffect(() => {
     const controller = new AbortController()
@@ -96,6 +99,11 @@ const HamburgerMenu = () => {
           <Link to="/" onClick={closeMenu}>
             <i className="fas fa-house" aria-hidden="true"></i>
             <span>Inicio</span>
+          </Link>
+
+          <Link to="/news" className={isNewsActive ? "active" : undefined} onClick={closeMenu}>
+            <i className="fas fa-newspaper" aria-hidden="true"></i>
+            <span>Noticias</span>
           </Link>
 
           {platforms.length === 0 && <span className="sidebar-empty">No platforms</span>}

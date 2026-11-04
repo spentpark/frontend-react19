@@ -9,7 +9,8 @@ consumes a **Game REST API**. The home screen shows a random game with its offic
 (automatically refreshed every 200 s, with a manual refresh button), and the catalog lets
 users browse a paginated list of games, filter them by platform through a hamburger side
 menu, search games by title, and open a detail view with metadata, YouTube videos and a
-Spotify soundtrack embed.
+Spotify soundtrack embed. The `/news` screen lists paginated video-game news (10 per page)
+from the separate `rss-game-node` RSS service.
 
 The repository is a real deployment project (not just a scaffold): it ships a multi-stage
 `Dockerfile`, an Nginx config, and a full Jenkins CI/CD pipeline that publishes build
@@ -47,30 +48,33 @@ frontend-react19/
 ├── Dockerfile                  # 2-stage build: node:24-alpine -> nginx:alpine
 ├── nginx.conf                  # SPA fallback (try_files ... /index.html) on :8065
 ├── Jenkinsfile                 # CI/CD pipeline (test, build, SonarQube, Nexus)
-├── .env                        # Local environment variables (VITE_API_URL)
+├── .env                        # Variables locales (VITE_API_URL, VITE_NEWS_API_URL y credenciales del JWT)
 └── src/
     ├── main.tsx                # React root, StrictMode, onUncaughtError, imports ./index.css
-    ├── App.tsx                 # Router only: Layout route + Home + Catalog + lazy GameDetail
+    ├── App.tsx                 # Router only: Layout route + Home + Catalog + lazy GameDetail/News
     ├── App.css / index.css     # index.css: variables del tema y base; App.css: componentes
-    ├── vite-env.d.ts           # Types VITE_API_URL on import.meta.env
+    ├── vite-env.d.ts           # Types de VITE_API_URL / VITE_NEWS_API_URL / credenciales del login
     ├── components/
     │   ├── Layout.tsx          # Header (marca, tema, menú) + contenido + footer
     │   ├── ErrorBoundary.tsx   # Class boundary that catches render errors
     │   ├── GameDetail.tsx      # Route /game/:id detail view + paginated reviews (lazy-loaded)
     │   ├── VideoEmbed.tsx      # Click-to-load YouTube facade
-    │   ├── HamburgerMenu.tsx   # Sidebar derecha de plataformas (Escape, inert, overlay)
+    │   ├── HamburgerMenu.tsx   # Sidebar derecha: Inicio/Noticias + plataformas (Escape, inert, overlay)
     │   ├── ThemeToggle.tsx     # Alterna tema claro/oscuro y lo guarda en localStorage
     │   └── __tests__/          # All component, page, service and http tests
     ├── pages/
     │   ├── Home.tsx            # `/`: random game + trailer, auto/manual refresh
-    │   └── Catalog.tsx         # `/catalog`: list, debounced search, pagination, error/empty states
+    │   ├── Catalog.tsx         # `/catalog`: list, debounced search, pagination, error/empty states
+    │   └── News.tsx            # `/news`: RSS news, paginated 10 per page (lazy-loaded)
     ├── config/
-    │   └── environment.ts      # Exposes VITE_API_URL
+    │   └── environment.ts      # Expone VITE_API_URL, VITE_NEWS_API_URL y las credenciales del login
     ├── services/
-    │   ├── http.ts             # Shared axios instance + isCanceledError / isNotFoundError
+    │   ├── auth.ts             # Login JWT, caché en memoria/localStorage y renovación
+    │   ├── http.ts             # Instancia axios compartida + interceptor Bearer + retry 401
     │   ├── gameService.ts      # getGames, searchGames, getGameById, getRandomGame
     │   ├── platformService.ts  # getPlatforms
-    │   └── reviewService.ts    # getReviewsByGame (reseñas paginadas de 10 en 10)
+    │   ├── reviewService.ts    # getReviewsByGame (reseñas paginadas de 10 en 10)
+    │   └── newsService.ts      # fetchNewsPage + normalización del feed RSS y formatos de fecha
     └── test/
         └── setup.ts            # Imports @testing-library/jest-dom/vitest
 ```
@@ -86,11 +90,21 @@ npm install
 ```
 
 A `.env` file at the repository root must define the backend endpoint, otherwise
-`environment.apiUrl` is `undefined` and every request fails:
+`environment.apiUrl` is `undefined` and every request fails. The API is **backend-python**
+(FastAPI) on port **7000**, with every route under `/api`:
 
 ```
-VITE_API_URL=http://<backend-host>:<port>
+VITE_API_URL=http://localhost:7000/api
+VITE_NEWS_API_URL=http://localhost:3001/api
+VITE_API_USERNAME=admin
+VITE_API_PASSWORD=Dev-aekiu4-9mHsG
 ```
+
+`VITE_NEWS_API_URL` points to the separate **rss-game-node** news backend (port **3001**),
+which serves `GET /api/game-news`. `VITE_API_USERNAME`/`VITE_API_PASSWORD` are the
+development credentials used to obtain the JWT from `POST /api/auth/login` (shared with
+backend-node20/rss-game-node, so the same token is valid in both backends). Do not ship real
+production credentials in the bundle.
 
 Key commands:
 
@@ -144,9 +158,9 @@ tool from Jenkins.
 
 **Architecture**
 - `App.tsx` is **router-only**: it declares the `Layout` route with `Home` at `/`
-  (random game), `Catalog` at `/catalog` (paginated list) and a lazily imported
-  `GameDetail` at `/game/:id`, and nothing else. Page-level logic lives in `src/pages/`,
-  reusable UI in `src/components/`.
+  (random game), `Catalog` at `/catalog` (paginated list), a lazily imported `GameDetail`
+  at `/game/:id` and a lazily imported `News` at `/news`, and nothing else. Page-level logic
+  lives in `src/pages/`, reusable UI in `src/components/`.
 - `Layout.tsx` owns the global chrome: the `.header` (`.brand`, `ThemeToggle` and
   `HamburgerMenu`), a `.content-wrap` > `.content` column that wraps `<Outlet />` in
   `ErrorBoundary` + `Suspense`, and the footer. Pages render inside `.content` without their
@@ -154,6 +168,20 @@ tool from Jenkins.
 - Data access is isolated in `src/services/*`. Components must call services, never `axios` directly.
 - All requests go through the shared `http` instance in `src/services/http.ts`, which sets
   `baseURL` from `environment.apiUrl` and JSON headers.
+- **Authentication**: backend-python protects all business endpoints with a JWT HS256
+  (`Authorization: Bearer <jwt>`). `src/services/auth.ts` obtains the token from
+  `POST /api/auth/login`, caches it in memory + `localStorage` (`spentpark-catalog-token`)
+  until one minute before expiry and deduplicates concurrent logins. The request interceptor
+  in `http.ts` adds the `Bearer` to every request except the login; on a `401` it refreshes
+  the token once and retries (never in a loop).
+- **News backend**: `/news` consumes the separate `rss-game-node` service
+  (`VITE_NEWS_API_URL`, port 3001) instead of backend-python. `newsService.fetchNewsPage`
+  calls it through the shared `http` instance using an absolute URL, so the `Bearer`
+  interceptor and the single `401` refresh+retry also apply; the JWT is accepted by both
+  backends (same secret, `issuer` and `audience`). The RSS feed ships `description` as HTML:
+  the service converts it to plain text (`stripHtml`) and the page never injects HTML
+  (`dangerouslySetInnerHTML` is not used) — image URLs are extracted from the feed markup
+  with `extractFirstImage`.
 - Environment values are read only via `import.meta.env` inside `src/config/environment.ts`,
   typed in `src/vite-env.d.ts`.
 - The platform filter is **URL state**: `Catalog` reads `?platform=<description>` via
@@ -204,11 +232,13 @@ tool from Jenkins.
   `aria-label` (tests and screen readers must not depend on the icon font).
 - Plain CSS with semantic class names (`header`, `sidebar`, `content`, `card`, `toolbar`,
   `styled-table`, `page-head`, `hero`, `btn-primary`, `btn-pagination`,
-  `game-detail-container`, `meta-label`, `section-title`) in `App.css`. No CSS framework and
-  **no inline styles** in components.
+  `game-detail-container`, `meta-label`, `section-title`, `news-list`, `news-item`,
+  `news-media`, `news-status`) in `App.css`. No CSS framework and **no inline styles** in
+  components.
 - `.sr-only` provides visually-hidden labels (search input, table caption).
-- Heading hierarchy is `h1` per page (`.page-head h1` in `Home`, `Catalog` and `GameDetail`)
-  with `h2` for every section, so no levels are skipped.
+- Heading hierarchy is `h1` per page (`.page-head h1` in `Home`, `Catalog`, `GameDetail` and
+  `News`) with `h2` for every section (news cards use `h2.news-title`), so no levels are
+  skipped.
 
 **Accessibility**
 - The hamburger button (`aria-label="Open menu"`) exposes `aria-expanded` / `aria-controls`;
@@ -227,6 +257,13 @@ tool from Jenkins.
   are enabled, though files still import `describe/it/expect/vi` explicitly.
 - Mock at the module boundary: `vi.mock("../../services/gameService")` for components and
   `vi.mock("../../services/http")` for services; reset state with `vi.clearAllMocks()` in `beforeEach`.
+- `auth.test.ts` mocks `axios` and `environment` to test login/caching/expiry/dedupe without a
+  network; `http.test.ts` mocks `../../services/auth` and uses a custom axios adapter to
+  verify the `Bearer` header, the login exemption and the single 401 refresh+retry.
+- `newsService.test.ts` mocks `../../services/http` and `../../config/environment` to cover the
+  paginated contract, the response aliases, client-side pagination, feed HTML stripping and
+  date formatting; `News.test.tsx` mocks `newsService.fetchNewsPage` (keeping the real helpers
+  via `importOriginal`) to cover loading/error/empty states and the pagination window.
 - Query by user-visible text/placeholder (`findByText`, `findByPlaceholderText`) and use
   `waitFor` for async assertions. Assert forwarded signals with `expect.any(AbortSignal)`.
 - `App.test.tsx` renders the real `<App />` (BrowserRouter) in two suites: it pushes `/` for
@@ -245,10 +282,15 @@ tool from Jenkins.
 
 ## Backend API Contract
 
-Base URL: `VITE_API_URL`.
+Base URL: `VITE_API_URL` → **backend-python** on `http://localhost:7000/api`.
+
+Auth: every business endpoint below requires `Authorization: Bearer <jwt>` (obtained from
+`POST /auth/login` with the configured credentials). The shared `http` client adds it
+automatically and renews it once on `401`.
 
 | Method | Endpoint | Params | Returns |
 | --- | --- | --- | --- |
+| POST | `/auth/login` | body `{username,password}` | `{ token, tokenType, expiresAt }` |
 | GET | `/games` | `platform`, `page`, `limit` | `ApiResponse` (`{ data: Game[], pagination }`) |
 | GET | `/games/search` | `title`, `page`, `limit` | `ApiResponse` |
 | GET | `/games/:id` | — | `GameDetail` |
@@ -258,11 +300,31 @@ Base URL: `VITE_API_URL`.
 
 All of them are called with an optional `AbortSignal` as described in *Data fetching*.
 
+### News service (`VITE_NEWS_API_URL`)
+
+Base URL: `VITE_NEWS_API_URL` → **rss-game-node** on `http://localhost:3001/api` (port 3001,
+a different backend from the catalog). The JWT HS256 is shared with backend-python (same
+secret/`issuer`/`audience`), so the token cached by `auth.ts` is valid there.
+
+| Method | Endpoint | Params | Returns |
+| --- | --- | --- | --- |
+| GET | `/game-news` | `page`, `limit` | `{ data: GameNews[], pagination }` |
+
+`newsService.unwrapNewsPage` tolerates the raw document shape (`_id`, `published_at`,
+`description` with HTML), the `news`/`articles`/`items` aliases and plain arrays (paginated
+in the client). The news backend must allow the frontend origin in CORS: any `localhost`
+port is allowed outside production, and production origins must be listed in the backend's
+`CORS_ORIGINS`.
+
 ## Gotchas
 
 - `coverage/` is generated output and **is tracked in git**; regenerate it, never hand-edit it.
   It is listed in `globalIgnores` in `eslint.config.js` and in `.prettierignore`, so it no
   longer pollutes `npm run lint` or `npm run format`.
+- `/news` is the only screen that talks to a second backend (`VITE_NEWS_API_URL`, port 3001).
+  Without that variable in `.env`, `newsService.NEWS_BASE_URL` becomes `undefined/game-news`
+  and the page falls back to its error state; the news backend must also allow the frontend
+  origin in CORS (all `localhost` ports are allowed in development).
 - `index.html` loads IBM Plex and Font Awesome 6 from CDNs; without network the layout still
   works but custom fonts/icons are missing. Icon-only controls keep `aria-label`s for this
   reason (and for the jsdom tests).
