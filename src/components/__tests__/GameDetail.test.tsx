@@ -77,12 +77,16 @@ describe("GameDetail", () => {
     vi.mocked(reviewService.getReviewsByGame).mockResolvedValue(emptyReviews)
   })
 
-  it("muestra loading inicialmente", () => {
+  it("muestra loading inicialmente", async () => {
     vi.spyOn(gameService, "getGameById").mockResolvedValue(mockGame)
 
     renderComponent()
 
     expect(screen.getByText("Loading game...")).toBeInTheDocument()
+
+    /* Se deja que la carga termine dentro del test: si no, las actualizaciones
+       de estado llegan después y React avisa de act(...) */
+    expect(await screen.findByText("The Last of Us")).toBeInTheDocument()
   })
 
   it("carga y muestra datos del juego", async () => {

@@ -38,7 +38,7 @@ artifacts to a Nexus repository and reports coverage to SonarQube. The stock Vit
 ```
 frontend-react19/
 ├── index.html                  # Vite entry HTML (mounts /src/main.tsx into #root)
-├── vite.config.ts              # Vite + Vitest config (jsdom, globals, setup, coverage, manualChunks)
+├── vite.config.ts              # Vite + Vitest config (jsdom, pool vmForks, maxWorkers, coverage, manualChunks)
 ├── eslint.config.js            # ESLint flat config
 ├── .prettierrc.json            # Prettier config (no semicolons, double quotes, 100 cols)
 ├── .prettierignore             # node_modules, dist, coverage, package-lock.json, *.md
@@ -166,7 +166,9 @@ tests excluded from analysis) → tars `dist/` into `frontend.tar.gz` → upload
 artifact to Nexus (`raw-releases`, `${APP_NAME}/${APP_VERSION}/`). SonarQube and Nexus
 credentials come from Jenkins credential IDs (`sonar-token`, `nexus`) — never hardcode
 tokens or credentials in source or in this file. The pipeline requests the `node24`
-tool from Jenkins.
+tool from Jenkins. `npm run test:coverage` uses the bounded worker count defined in
+`vite.config.ts` (see *Testing*) so the test stage never oversubscribes the agent's CPU
+quota.
 
 ## Development Conventions
 
@@ -305,9 +307,18 @@ tool from Jenkins.
   `Assertion` interface, so the bare import makes `tsc -b` fail on matchers such as
   `toBeInTheDocument`.
 - Every new feature or bug fix must add or update a test, and `npm run test:coverage` must stay green.
-- `npm run test:run` takes ~20s and the default reporter prints nothing until it finishes
-  when there is no TTY — that is not a hang. Most of the time goes to creating the jsdom
-  environment per file.
+- Tests must not end with React state updates still pending: `await` them with `findBy*` or
+  `waitFor` before the test returns. Otherwise React logs "An update to X inside a test was
+  not wrapped in act(...)" to stderr and that noise buries real failures in the Jenkins log.
+- Vitest runs with `pool: "vmForks"` and `maxWorkers: 2` (see `vite.config.ts`). The VM pool
+  builds jsdom once per worker instead of once per file while keeping per-file isolation. The
+  worker cap exists because the Jenkins container advertises every host CPU even when its
+  CPU quota is much smaller: with the default (`CPUs - 1`) a fork was started per CPU, they
+  starved each other, and one worker exceeded Vitest's 60 s startup timeout, failing the
+  build with "Failed to start forks worker ... Timeout waiting for worker to respond". Do not
+  raise the cap without measuring on the Jenkins agent.
+- `npm run test:run` takes ~10s and the default reporter prints nothing until it finishes
+  when there is no TTY — that is not a hang.
 
 ## Backend API Contract
 

@@ -34,11 +34,15 @@ describe("HamburgerMenu", () => {
     vi.spyOn(platformService, "getPlatforms").mockResolvedValue(mockPlatforms)
   })
 
-  it("renderiza el botón hamburguesa", () => {
+  it("renderiza el botón hamburguesa", async () => {
     renderMenu()
 
     const button = screen.getByRole("button", { name: "Open menu" })
     expect(button).toBeInTheDocument()
+
+    /* Se espera a que terminen de cargar las plataformas para no dejar
+       actualizaciones de estado pendientes fuera de act(...) */
+    await screen.findByText("PlayStation 4")
   })
 
   it("abre el menú al hacer click", async () => {
@@ -64,7 +68,7 @@ describe("HamburgerMenu", () => {
     expect(platformService.getPlatforms).toHaveBeenCalledWith(expect.any(AbortSignal))
   })
 
-  it("expone el estado del menú con aria-expanded", () => {
+  it("expone el estado del menú con aria-expanded", async () => {
     renderMenu()
 
     const button = screen.getByRole("button", { name: "Open menu" })
@@ -74,6 +78,9 @@ describe("HamburgerMenu", () => {
     fireEvent.click(button)
 
     expect(button).toHaveAttribute("aria-expanded", "true")
+
+    /* La carga de plataformas resuelve aquí, dentro del test */
+    await screen.findByText("PlayStation 4")
   })
 
   it("cierra el menú al hacer click en el overlay", async () => {
@@ -157,12 +164,15 @@ describe("HamburgerMenu", () => {
     expect(screen.getByRole("link", { name: "Noticias" })).toHaveAttribute("href", "/news")
   })
 
-  it("marca Noticias como activo en su ruta", () => {
+  it("marca Noticias como activo en su ruta", async () => {
     renderMenu("/news")
 
     openMenu()
 
     expect(screen.getByRole("link", { name: "Noticias" })).toHaveClass("active")
+
+    /* La carga de plataformas resuelve aquí, dentro del test */
+    await screen.findByText("PlayStation 4")
   })
 
   it("avisa cuando la API no devuelve un array", async () => {

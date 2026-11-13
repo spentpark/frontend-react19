@@ -94,6 +94,10 @@ describe("News (noticias de videojuegos)", () => {
       screen.getByRole("heading", { level: 1, name: "Noticias de videojuegos" })
     ).toBeInTheDocument()
     expect(screen.getByText("Inicio")).toHaveAttribute("href", "/")
+
+    /* Se espera a que la carga termine dentro del test para no dejar
+       actualizaciones de estado pendientes fuera de act(...) */
+    expect(await screen.findByText("Noticia 1")).toBeInTheDocument()
   })
 
   /* ================= LISTADO ================= */
