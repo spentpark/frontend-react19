@@ -176,7 +176,10 @@ está comentada en el `Jenkinsfile`) → deploy. SonarQube credentials come from
 credential ID `sonar-token` — never hardcode tokens or credentials in source or in this
 file. The pipeline requests the `node24` tool from Jenkins. `npm run test:coverage` uses
 the bounded worker count defined in `vite.config.ts` (see *Testing*) so the test stage never
-oversubscribes the agent's CPU quota.
+oversubscribes the agent's CPU quota. El stage de SonarQube limita el heap de Node del
+scanner con `-Dsonar.javascript.node.maxspace=1024` y reintenta una vez: en el agente
+(4 GB) el valor por defecto (~2 GB) provocaba `Failed to start the bridge server (300s timeout)`
+de forma esporádica.
 
 El último stage, *Deploy frontend en servidor Docker (192.168.1.82)*, se ejecuta si
 `DEPLOY_ENABLED` está activo (parámetro, por defecto `true`) y despliega por SSH con la
@@ -189,7 +192,10 @@ credencial `docker-server-ssh`:
    `${DEPLOY_DIR}`, verificando su `sha256`.
 3. Construye la imagen con `docker compose build frontend-react` **antes** de tocar el
    contenedor, para que se apliquen los `build.args` del compose (`VITE_API_URL=/api`,
-   `VITE_NEWS_API_URL=/news-api`).
+   `VITE_NEWS_API_URL=/news-api`). Ese comando tiene un bug conocido de Buildx en CI que
+   puede fallar con `NotFound: forwarding Ping: no such job` (docker/buildx#3486): el stage
+   reintenta y, si persiste, compila con `docker buildx build` leyendo `context`/`args`/
+   `dockerfile`/`image` del propio compose (misma fuente de verdad, sin pasar por bake).
 4. Elimina los contenedores del proyecto cuyo servicio ya no existe en el compose (limpieza
    de servicios renombrados), recrea `frontend-react` y verifica la respuesta HTTP en
    `http://127.0.0.1:8065/`.

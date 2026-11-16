@@ -64,18 +64,31 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                    sh '''
+                    sh '''set -eu
                         npm install -g sonar-scanner
 
-                        sonar-scanner \
-                        -Dsonar.projectKey=frontend-react \
-                        -Dsonar.projectName=frontend-react \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.token=$SONAR_TOKEN \
-                        -Dsonar.sources=src \
-                        -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
-                        -Dsonar.exclusions=**/*.test.ts,**/*.test.tsx \
-                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                        # El bridge de Node del scanner pide ~2 GB de heap por defecto y
+                        # en este agente (4 GB) puede agotar el timeout de arranque
+                        # ("Failed to start the bridge server (300s timeout)", build #19).
+                        # Se limita el heap y se reintenta una vez por si es transitorio.
+                        run_sonar() {
+                            sonar-scanner \
+                            -Dsonar.projectKey=frontend-react \
+                            -Dsonar.projectName=frontend-react \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.token=$SONAR_TOKEN \
+                            -Dsonar.sources=src \
+                            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
+                            -Dsonar.exclusions=**/*.test.ts,**/*.test.tsx \
+                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                            -Dsonar.javascript.node.maxspace=1024
+                        }
+
+                        run_sonar || {
+                            echo "AVISO: sonar-scanner falló; reintentando una vez..."
+                            sleep 10
+                            run_sonar
+                        }
                     '''
                 }
 
@@ -374,8 +387,61 @@ if docker compose version >/dev/null 2>&1; then
 else
     DC="docker-compose"
 fi
-$DC -f "${compose_file}" build "${service}"
-echo "  - Imagen construida correctamente (docker compose build)"
+
+# Bug conocido de buildx bake (docker/buildx#3486): `docker compose build` puede
+# fallar de forma esporádica con "NotFound: forwarding Ping: no such job" cuando
+# el job de build desaparece del daemon. Se reintenta y, si persiste, se compila
+# con `docker buildx build` usando la MISMA configuración del compose del
+# proyecto (context, args, dockerfile, target e imagen), sin pasar por bake.
+attempt=0
+while [ "${attempt}" -lt 2 ]; do
+    attempt=$((attempt + 1))
+    if $DC -f "${compose_file}" build "${service}"; then
+        echo "  - Imagen construida correctamente (docker compose build)"
+        exit 0
+    fi
+    echo "  - AVISO: 'docker compose build' falló (intento ${attempt}/2; bug conocido de buildx bake)." >&2
+    sleep 5
+done
+
+echo "  - Fallback: compilando con 'docker buildx build' desde la configuración del compose del proyecto..." >&2
+config_json="$($DC -f "${compose_file}" config --format json)"
+context="$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '.services[$s].build.context // empty')"
+dockerfile="$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '.services[$s].build.dockerfile // "Dockerfile"')"
+target="$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '.services[$s].build.target // empty')"
+image="$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '.services[$s].image // empty')"
+if [ -z "${context}" ] || [ -z "${image}" ]; then
+    echo "ERROR: el compose no expone build.context/build.image para '${service}': no se puede usar el fallback." >&2
+    exit 1
+fi
+
+# El script remoto es `sh` (dash): se guardan los argumentos en $@ para no
+# romper valores con espacios.
+set -- --load
+while IFS= read -r build_arg; do
+    if [ -n "${build_arg}" ]; then
+        set -- "$@" "${build_arg}"
+    fi
+done <<BUILD_ARGS
+$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '(.services[$s].build.args // {}) | to_entries[] | "--build-arg=\(.key)=\(.value)"')
+BUILD_ARGS
+if [ -n "${target}" ]; then
+    set -- "$@" --target "${target}"
+fi
+
+attempt=0
+while [ "${attempt}" -lt 2 ]; do
+    attempt=$((attempt + 1))
+    if docker buildx build "$@" -f "${context}/${dockerfile}" -t "${image}" "${context}"; then
+        echo "  - Imagen construida correctamente (docker buildx build, sin bake)"
+        exit 0
+    fi
+    echo "  - AVISO: el fallback 'docker buildx build' falló (intento ${attempt}/2)." >&2
+    sleep 5
+done
+
+echo "ERROR: no se pudo construir la imagen ni con compose ni con buildx build." >&2
+exit 1
 REMOTE_COMPOSE_BUILD
     if [ -n "${IMAGE_TAG}" ]; then
         BUILT_IMAGE_ID="$(ssh ${SSH_OPTS} "${SSH_TARGET}" "sh -s -- ${IMAGE_TAG}" <<'REMOTE_IMAGE_ID'
