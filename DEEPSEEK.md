@@ -48,7 +48,8 @@ frontend-react19/
 ├── Dockerfile                  # 2-stage build: node:24-alpine -> nginx:alpine (ARGs VITE_*)
 ├── .dockerignore               # Excluye node_modules, dist, coverage, .git del contexto de build
 ├── nginx.conf                  # SPA fallback + proxy inverso `/api` y `/news-api` on :8065
-├── Jenkinsfile                 # CI/CD pipeline (test, build, SonarQube, Nexus)
+├── docker-compose.yml          # Compose DEL PROYECTO: fuente de verdad del despliegue remoto
+├── Jenkinsfile                 # CI/CD pipeline (test, build, SonarQube, package, deploy)
 ├── .env                        # Variables locales (VITE_API_URL, VITE_NEWS_API_URL y credenciales del JWT)
 └── src/
     ├── main.tsx                # React root, StrictMode, onUncaughtError, imports ./index.css
@@ -151,24 +152,56 @@ docker build -t frontend-react \
   --build-arg VITE_NEWS_API_URL=http://200.83.105.123:3001/api .
 ```
 
-The supported way to run the full stack is the sibling `C:\git\docker-compose.yml`
+The supported way to run the full stack locally is the sibling `C:\git\docker-compose.yml`
 (`docker compose up -d --build`), which starts `backend`, `news` and `frontend` on the same
 network. Because Nginx resolves `backend`/`news` at startup, the image expects that Compose
 network (a bare `docker run` without them fails with "host not found in upstream"). The
 `.dockerignore` keeps `node_modules`/`dist` out of the build context: copying Windows
 `node_modules` into the Linux image would break native bindings and bloat the context.
 
+El despliegue real (servidor Docker `192.168.1.82`) no usa ese compose local ni el que
+haya en el servidor: usa el **[docker-compose.yml](docker-compose.yml) DEL PROYECTO**. El
+pipeline lo publica en `/home/spentpark/gitDeploy/gitreact/docker-compose.yml` y despliega
+con él. Sus dos servicios son `backend-python` y `frontend-react`; el backend expone el
+alias de red `backend` porque `nginx.conf` hace `proxy_pass http://backend:7000/api/` (en
+el compose local el servicio sí se llama `backend`). Las rutas `build:` son relativas a
+`DEPLOY_DIR`, donde el pipeline sincroniza el repo (p. ej. `./frontend-react19`).
+
 ### CI/CD (Jenkinsfile)
 
 The pipeline runs, in order: `npm install --legacy-peer-deps` → `npm run test:coverage`
 → `npm run build` → SonarQube scan (sources `src`, LCOV from `coverage/lcov.info`,
-tests excluded from analysis) → tars `dist/` into `frontend.tar.gz` → uploads the
-artifact to Nexus (`raw-releases`, `${APP_NAME}/${APP_VERSION}/`). SonarQube and Nexus
-credentials come from Jenkins credential IDs (`sonar-token`, `nexus`) — never hardcode
-tokens or credentials in source or in this file. The pipeline requests the `node24`
-tool from Jenkins. `npm run test:coverage` uses the bounded worker count defined in
-`vite.config.ts` (see *Testing*) so the test stage never oversubscribes the agent's CPU
-quota.
+tests excluded from analysis) → tars `dist/` into `frontend.tar.gz` (la subida a Nexus
+está comentada en el `Jenkinsfile`) → deploy. SonarQube credentials come from the Jenkins
+credential ID `sonar-token` — never hardcode tokens or credentials in source or in this
+file. The pipeline requests the `node24` tool from Jenkins. `npm run test:coverage` uses
+the bounded worker count defined in `vite.config.ts` (see *Testing*) so the test stage never
+oversubscribes the agent's CPU quota.
+
+El último stage, *Deploy frontend en servidor Docker (192.168.1.82)*, se ejecuta si
+`DEPLOY_ENABLED` está activo (parámetro, por defecto `true`) y despliega por SSH con la
+credencial `docker-server-ssh`:
+
+1. Localiza `DEPLOY_DIR` (parámetro, por defecto `/home/spentpark/gitDeploy/gitreact`; si
+   se deja vacío se detecta desde las labels del contenedor, pero solo la carpeta).
+2. Sincroniza el repositorio en `${DEPLOY_DIR}/frontend-react19` (sin `node_modules`,
+   `dist`, `coverage` ni `.git`) y publica el `docker-compose.yml` del proyecto en
+   `${DEPLOY_DIR}`, verificando su `sha256`.
+3. Construye la imagen con `docker compose build frontend-react` **antes** de tocar el
+   contenedor, para que se apliquen los `build.args` del compose (`VITE_API_URL=/api`,
+   `VITE_NEWS_API_URL=/news-api`).
+4. Elimina los contenedores del proyecto cuyo servicio ya no existe en el compose (limpieza
+   de servicios renombrados), recrea `frontend-react` y verifica la respuesta HTTP en
+   `http://127.0.0.1:8065/`.
+
+Parámetros del stage: `DEPLOY_ENABLED`, `DEPLOY_HOST`, `SSH_CREDENTIALS_ID`, `DEPLOY_DIR`,
+`COMPOSE_FILE`, `COMPOSE_SERVICE`, `CONTAINER_NAME`, `FALLBACK_CONTAINER`, `APP_PORT` y
+`PROBE_PATH`. El compose que exista en la máquina no se lee ni se reutiliza.
+
+> Nota: `nginx.conf` sigue proxificando `/news-api` a `news:3001`, pero el servicio de
+> noticias (`rss-game-node`) no forma parte del compose del stack `gitreact`, así que en el
+> servidor esa ruta responderá 502 hasta que se añada el servicio al compose y se despliegue
+> también el backend de noticias.
 
 ## Development Conventions
 
