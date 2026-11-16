@@ -184,6 +184,12 @@ describe("news helpers", () => {
     expect(extractFirstImage("<p>Sin imagen</p>")).toBeNull()
   })
 
+  it("limpia el HTML aunque no haya etiquetas o queden sin cerrar", () => {
+    expect(stripHtml("Texto sin etiquetas")).toBe("Texto sin etiquetas")
+    expect(stripHtml("Texto <sin cerrar")).toBe("Texto <sin cerrar")
+    expect(stripHtml("<p>Uno</p><p>Dos</p>")).toBe("Uno Dos")
+  })
+
   it("normaliza la fecha y conserva el valor original si no es válida", () => {
     expect(formatNewsDate("2026-01-15T10:30:00.000Z")).toContain("2026")
     expect(formatNewsDate("")).toBe("")

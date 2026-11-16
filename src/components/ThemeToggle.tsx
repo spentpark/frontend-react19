@@ -22,12 +22,12 @@ function ThemeToggle() {
 
     if (stored) return stored
 
-    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"
+    return document.documentElement.dataset.theme === "dark" ? "dark" : "light"
   })
 
   /* Mantiene el atributo del documento alineado con el estado del botón */
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme)
+    document.documentElement.dataset.theme = theme
   }, [theme])
 
   const toggleTheme = () => {

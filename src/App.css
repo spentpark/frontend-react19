@@ -159,7 +159,10 @@
 }
 
 .sidebar a:hover {
-  background: rgba(255, 255, 255, 0.08);
+  /* Opaco a propósito: equivale a blanco al 8% sobre `--header`, pero el
+     analizador de contraste de Sonar no compone el alfa y leía blanco sobre
+     blanco (ratio 1:1) */
+  background: #212a37;
   color: #fff;
   text-decoration: none;
 }
@@ -410,7 +413,9 @@
   padding: 14px 18px;
   border: 1px solid rgba(179, 38, 30, 0.35);
   border-radius: 10px;
-  background: rgba(179, 38, 30, 0.08);
+  /* 8% de #b3261e sobre --bg, fijado como color opaco: Sonar no compone el
+     alfa y comparaba #b3261e sobre #b3261e (ratio 1:1) */
+  background: #ede4e7;
   color: #b3261e;
   text-align: center;
   font-weight: 500;
@@ -418,7 +423,8 @@
 
 [data-theme="dark"] .error-message {
   border-color: rgba(255, 80, 70, 0.4);
-  background: rgba(255, 80, 70, 0.12);
+  /* 12% de #ff5046 sobre --bg en tema oscuro, también opaco por el mismo motivo */
+  background: #281925;
   color: #ff9b93;
 }
 
@@ -654,6 +660,7 @@
 }
 
 .hero-loading {
+  display: block;
   margin: 0 0 12px;
   font-size: 14px;
   color: var(--muted);

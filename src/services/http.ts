@@ -52,7 +52,7 @@ http.interceptors.response.use(
     const originalRequest = error.config as RetryableRequestConfig | undefined
 
     if (error.response?.status !== 401 || !originalRequest || originalRequest._authRetry) {
-      return Promise.reject(error)
+      throw error
     }
 
     originalRequest._authRetry = true

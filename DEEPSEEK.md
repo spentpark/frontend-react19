@@ -283,6 +283,22 @@ quota.
 - Heavy third-party embeds (YouTube) are click-to-load facades via `VideoEmbed`; images use
   `loading="lazy"` and `decoding="async"`.
 
+**SonarQube (calidad)**
+- El quality gate exige `new_violations = 0`, así que el código nuevo no debe introducir
+  hallazgos. Reglas ya corregidas que no deben reaparecer:
+  - `S8786` (regexes con retroceso no lineal): evita patrones sin ancla con cuantificadores no
+    acotados sobre entradas largas, p. ej. `/<[^>]*>/g` o `/\/+$/`; recorre la cadena con
+    `indexOf`/`slice` (como `removeTags` y `stripTrailingSlashes` en `newsService.ts`).
+  - `S7727`: no pases referencias a `.map()`/`.forEach()`; usa `.map((item, index) => fn(item, index))`.
+  - `S6594`: usa `regexp.exec(texto)` en lugar de `texto.match(regexp)`.
+  - `S7746`: en `async`, usa `throw error` en vez de `return Promise.reject(error)`.
+  - `S7761`: accede a `data-*` con `elemento.dataset`, no con `get/setAttribute`.
+  - `S6819`: el estado de carga usa `<output>` (rol `status` implícito), no `<p role="status">`.
+  - `S6772`: escribe el espacio entre texto y elementos inline de JSX con `{" "}` explícito.
+  - `S7924` (contraste): no pongas texto sobre fondos `rgba()`; el analizador no compone el
+    alfa y compara el color RGB tal cual. Usa colores opacos que cumplan 4.5:1 (los fondos de
+    `.error-message` y `.sidebar a:hover` están fijados así a propósito).
+
 **Testing**
 - Tests live in `src/components/__tests__/` and use the `*.test.ts(x)` suffix; Vitest globals
   are enabled, though files still import `describe/it/expect/vi` explicitly.

@@ -147,11 +147,7 @@ function Home() {
             <div className="hero-body">
               <h2 className="hero-title">{game.title}</h2>
 
-              {loading && (
-                <p className="hero-loading" role="status">
-                  Cargando otro juego…
-                </p>
-              )}
+              {loading && <output className="hero-loading">Cargando otro juego…</output>}
 
               <dl className="hero-fields">
                 <div className="hero-field">

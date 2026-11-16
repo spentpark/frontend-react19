@@ -57,6 +57,23 @@ export interface GameNewsItem {
 export const NEWS_PAGE_SIZE = 10
 
 /**
+ * Quita las barras finales de una URL.
+ *
+ * Se recorre la cadena a mano en lugar de usar `/\/+$/`: ese patrón es no
+ * lineal con muchas barras sin terminar (Sonar S8786) y aquí la entrada viene
+ * de la configuración del entorno.
+ */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1
+  }
+
+  return value.slice(0, end)
+}
+
+/**
  * URL del listado de noticias. Vive en el backend `rss-game-node` (puerto 3001
  * en desarrollo), distinto del backend del catálogo; el JWT es válido en ambos
  * porque comparten secreto, `issuer` y `audience`.
@@ -68,7 +85,7 @@ export const NEWS_PAGE_SIZE = 10
  * pública.
  */
 export function resolveNewsBaseUrl(value: string): string {
-  const configured = (value ?? "").trim().replace(/\/+$/, "")
+  const configured = stripTrailingSlashes((value ?? "").trim())
 
   if (!configured || /^https?:\/\//i.test(configured)) {
     return configured
@@ -181,13 +198,37 @@ function text(value: string | undefined | null): string {
 }
 
 /**
+ * Sustituye cada etiqueta HTML por un espacio.
+ *
+ * Se recorre el texto a mano en lugar de usar `/<[^>]*>/g`: ese patrón vuelve
+ * cuadrático el motor de expresiones regulares con muchos `<` sin cerrar
+ * (Sonar S8786), y el resumen se calcula con el HTML que llega del feed.
+ */
+function removeTags(value: string): string {
+  let result = ""
+  let index = 0
+
+  while (index < value.length) {
+    const start = value.indexOf("<", index)
+    if (start === -1) return result + value.slice(index)
+
+    const end = value.indexOf(">", start + 1)
+    if (end === -1) return result + value.slice(index)
+
+    result += `${value.slice(index, start)} `
+    index = end + 1
+  }
+
+  return result
+}
+
+/**
  * Convierte el HTML del feed RSS en texto plano para el resumen de la tarjeta.
  * El HTML nunca se inyecta en el DOM: se eliminan las etiquetas y se decodifican
  * las entidades más habituales.
  */
 export function stripHtml(value: string): string {
-  return value
-    .replace(/<[^>]*>/g, " ")
+  return removeTags(value)
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
@@ -200,7 +241,7 @@ export function stripHtml(value: string): string {
 
 /** Extrae la URL de la primera imagen del HTML del feed, si la hay. */
 export function extractFirstImage(value: string): string | null {
-  const match = value.match(/<img[^>]+src=["']([^"']+)["']/i)
+  const match = /<img[^>]+src=["']([^"']+)["']/i.exec(value)
   return match ? match[1].trim() : null
 }
 

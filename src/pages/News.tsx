@@ -51,7 +51,7 @@ function News() {
 
         const data = await fetchNewsPage(page, NEWS_PAGE_SIZE, controller.signal)
 
-        setNews(data.data.map(toNewsItem))
+        setNews(data.data.map((item, index) => toNewsItem(item, index)))
         setPagination(data.pagination)
       } catch (err) {
         if (isCanceledError(err)) return
@@ -175,7 +175,7 @@ function News() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      Leer noticia completa
+                      Leer noticia completa{" "}
                       <i className="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
                     </a>
                   )}
