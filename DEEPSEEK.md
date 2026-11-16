@@ -204,6 +204,11 @@ Parámetros del stage: `DEPLOY_ENABLED`, `DEPLOY_HOST`, `SSH_CREDENTIALS_ID`, `D
 `COMPOSE_FILE`, `COMPOSE_SERVICE`, `CONTAINER_NAME`, `FALLBACK_CONTAINER`, `APP_PORT` y
 `PROBE_PATH`. El compose que exista en la máquina no se lee ni se reutiliza.
 
+> Cuidado al editar los bloques `sh '''...'''` del `Jenkinsfile`: las cadenas con triples
+> comillas simples **también procesan escapes de Groovy**, así que un `\(` literal (por
+> ejemplo en un filtro `jq`) rompe el pipeline con `unexpected char: '\'`. Evita backslashes
+> en esos bloques o duplícalos (`\\(`), y valida con `sh -n` además del parser de Groovy.
+
 > Nota: `nginx.conf` sigue proxificando `/news-api` a `news:3001`, pero el servicio de
 > noticias (`rss-game-node`) no forma parte del compose del stack `gitreact`, así que en el
 > servidor esa ruta responderá 502 hasta que se añada el servicio al compose y se despliegue

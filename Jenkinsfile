@@ -423,7 +423,7 @@ while IFS= read -r build_arg; do
         set -- "$@" "${build_arg}"
     fi
 done <<BUILD_ARGS
-$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '(.services[$s].build.args // {}) | to_entries[] | "--build-arg=\(.key)=\(.value)"')
+$(printf '%s' "${config_json}" | jq -r --arg s "${service}" '(.services[$s].build.args // {}) | to_entries[] | "--build-arg=" + .key + "=" + (.value | tostring)')
 BUILD_ARGS
 if [ -n "${target}" ]; then
     set -- "$@" --target "${target}"
