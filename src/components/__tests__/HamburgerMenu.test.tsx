@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import HamburgerMenu from "../HamburgerMenu"
 import * as platformService from "../../services/platformService"
@@ -18,75 +18,219 @@ const mockPlatforms = [
   }
 ]
 
-describe("HamburgerMenu", () => {
+const renderMenu = (path = "/") =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <HamburgerMenu />
+    </MemoryRouter>
+  )
 
+const openMenu = () => fireEvent.click(screen.getByRole("button", { name: "Open menu" }))
+
+describe("HamburgerMenu", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+
     vi.spyOn(platformService, "getPlatforms").mockResolvedValue(mockPlatforms)
   })
 
-  it("renderiza el botón hamburguesa", () => {
+  it("renderiza el botón hamburguesa", async () => {
+    renderMenu()
 
-    render(
-      <MemoryRouter>
-        <HamburgerMenu />
-      </MemoryRouter>
-    )
-
-    const button = screen.getByRole("button")
+    const button = screen.getByRole("button", { name: "Open menu" })
     expect(button).toBeInTheDocument()
+
+    /* Se espera a que terminen de cargar las plataformas para no dejar
+       actualizaciones de estado pendientes fuera de act(...) */
+    await screen.findByText("PlayStation 4")
   })
 
   it("abre el menú al hacer click", async () => {
+    renderMenu()
 
-    render(
-      <MemoryRouter>
-        <HamburgerMenu />
-      </MemoryRouter>
-    )
-
-    const button = screen.getByRole("button")
-
-    fireEvent.click(button)
+    openMenu()
 
     expect(screen.getByText("Plataformas")).toBeInTheDocument()
+
+    await screen.findByText("PlayStation 4")
   })
 
   it("carga plataformas desde el service", async () => {
+    renderMenu()
 
-    render(
-      <MemoryRouter>
-        <HamburgerMenu />
-      </MemoryRouter>
-    )
-
-    fireEvent.click(screen.getByRole("button"))
+    openMenu()
 
     await waitFor(() => {
       expect(screen.getByText("PlayStation 4")).toBeInTheDocument()
       expect(screen.getByText("Xbox One")).toBeInTheDocument()
     })
+
+    expect(platformService.getPlatforms).toHaveBeenCalledWith(expect.any(AbortSignal))
   })
 
- it("cierra el menú al hacer click en overlay", async () => {
-  render(
-    <MemoryRouter>
-      <HamburgerMenu />
-    </MemoryRouter>
-  )
+  it("expone el estado del menú con aria-expanded", async () => {
+    renderMenu()
 
-  const button = screen.getByText("☰")
-  fireEvent.click(button)
+    const button = screen.getByRole("button", { name: "Open menu" })
 
-  await screen.findByText("PlayStation 4")
+    expect(button).toHaveAttribute("aria-expanded", "false")
 
-  const overlay = document.querySelector('div[style*="rgba(0, 0, 0, 0.4)"]')
-  fireEvent.click(overlay!)
+    fireEvent.click(button)
 
-  const menu = screen.getByText("Plataformas").parentElement
+    expect(button).toHaveAttribute("aria-expanded", "true")
 
-  await waitFor(() => {
-    expect(menu).toHaveStyle("left: -260px")
+    /* La carga de plataformas resuelve aquí, dentro del test */
+    await screen.findByText("PlayStation 4")
   })
-})
 
+  it("cierra el menú al hacer click en el overlay", async () => {
+    renderMenu()
+
+    const button = screen.getByRole("button", { name: "Open menu" })
+    fireEvent.click(button)
+
+    await screen.findByText("PlayStation 4")
+
+    const overlay = document.querySelector(".overlay")
+    expect(overlay).not.toBeNull()
+
+    fireEvent.click(overlay!)
+
+    await waitFor(() => {
+      expect(document.querySelector(".overlay")).toBeNull()
+    })
+
+    expect(button).toHaveAttribute("aria-expanded", "false")
+  })
+
+  it("cierra el menú con la tecla Escape", async () => {
+    renderMenu()
+
+    const button = screen.getByRole("button", { name: "Open menu" })
+    fireEvent.click(button)
+
+    await screen.findByText("PlayStation 4")
+
+    fireEvent.keyDown(window, { key: "Escape" })
+
+    await waitFor(() => {
+      expect(button).toHaveAttribute("aria-expanded", "false")
+    })
+  })
+
+  it("mantiene el menú abierto al pulsar otras teclas", async () => {
+    renderMenu()
+
+    const button = screen.getByRole("button", { name: "Open menu" })
+    fireEvent.click(button)
+
+    await screen.findByText("PlayStation 4")
+
+    fireEvent.keyDown(window, { key: "Enter" })
+
+    expect(button).toHaveAttribute("aria-expanded", "true")
+  })
+
+  it("enlaza cada plataforma con su parámetro de búsqueda", async () => {
+    renderMenu()
+
+    openMenu()
+
+    await screen.findByText("PlayStation 4")
+
+    expect(screen.getByRole("link", { name: "PlayStation 4" })).toHaveAttribute(
+      "href",
+      "/catalog?platform=PlayStation%204"
+    )
+  })
+
+  it("enlaza al inicio de la aplicación", async () => {
+    renderMenu()
+
+    openMenu()
+
+    await screen.findByText("PlayStation 4")
+
+    expect(screen.getByRole("link", { name: "Inicio" })).toHaveAttribute("href", "/")
+  })
+
+  it("enlaza a la página de noticias", async () => {
+    renderMenu()
+
+    openMenu()
+
+    await screen.findByText("PlayStation 4")
+
+    expect(screen.getByRole("link", { name: "Noticias" })).toHaveAttribute("href", "/news")
+  })
+
+  it("marca Noticias como activo en su ruta", async () => {
+    renderMenu("/news")
+
+    openMenu()
+
+    expect(screen.getByRole("link", { name: "Noticias" })).toHaveClass("active")
+
+    /* La carga de plataformas resuelve aquí, dentro del test */
+    await screen.findByText("PlayStation 4")
+  })
+
+  it("avisa cuando la API no devuelve un array", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(platformService, "getPlatforms").mockResolvedValue(
+      {} as unknown as typeof mockPlatforms
+    )
+
+    renderMenu()
+
+    expect(await screen.findByText("No platforms")).toBeInTheDocument()
+    expect(consoleError).toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
+  it("muestra un mensaje si falla la carga de plataformas", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    vi.spyOn(platformService, "getPlatforms").mockRejectedValue(new Error("boom"))
+
+    renderMenu()
+
+    openMenu()
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudieron cargar las plataformas."
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it("no muestra error si la petición se cancela", async () => {
+    const canceled = Object.assign(new Error("canceled"), { name: "CanceledError" })
+
+    vi.spyOn(platformService, "getPlatforms").mockRejectedValue(canceled)
+
+    renderMenu()
+
+    await waitFor(() => {
+      expect(platformService.getPlatforms).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("cierra el menú al pulsar un enlace de plataforma", async () => {
+    renderMenu()
+
+    openMenu()
+
+    const link = await screen.findByRole("link", { name: "PlayStation 4" })
+
+    fireEvent.click(link)
+
+    await waitFor(() => {
+      expect(document.querySelector(".overlay")).toBeNull()
+    })
+  })
 })

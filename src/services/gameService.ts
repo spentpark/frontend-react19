@@ -25,6 +25,19 @@ export interface GameDetail {
   spotify_ost?: string
 }
 
+/* Juego al azar que alimenta la pantalla de inicio */
+export interface RandomGame {
+  id: number
+  title: string
+  platform?: string | null
+  publisher?: string | null
+  releasedate?: string | null
+  players?: string | null
+  genre?: string | null
+  imageOriginal?: string | null
+  youtubeTrailer: string
+}
+
 export interface Pagination {
   currentPage: number
   perPage: number
@@ -41,11 +54,12 @@ export interface ApiResponse {
 export const getGames = async (
   platform: string,
   page: number,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<ApiResponse> => {
-
   const response = await http.get<ApiResponse>("/games", {
-    params: { platform, page, limit }
+    params: { platform, page, limit },
+    signal
   })
 
   return response.data
@@ -55,20 +69,37 @@ export const getGames = async (
 export const searchGames = async (
   title: string,
   page: number,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<ApiResponse> => {
-
   const response = await http.get<ApiResponse>("/games/search", {
-    params: { title, page, limit }
+    params: { title, page, limit },
+    signal
   })
 
   return response.data
 }
 
 /* OBTENER DETALLE DEL JUEGO */
-export const getGameById = async (id: string | number): Promise<GameDetail> => {
+export const getGameById = async (
+  id: string | number,
+  signal?: AbortSignal
+): Promise<GameDetail> => {
+  const response = await http.get<GameDetail>(`/games/${id}`, { signal })
 
-  const response = await http.get<GameDetail>(`/games/${id}`)
+  return response.data
+}
+
+/* Evita que la pantalla de inicio se quede cargando indefinidamente si el
+   backend no responde */
+const RANDOM_GAME_TIMEOUT_MS = 15000
+
+/* JUEGO AL AZAR CON TRÁILER */
+export const getRandomGame = async (signal?: AbortSignal): Promise<RandomGame> => {
+  const response = await http.get<RandomGame>("/games/random", {
+    signal,
+    timeout: RANDOM_GAME_TIMEOUT_MS
+  })
 
   return response.data
 }
